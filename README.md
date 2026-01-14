@@ -156,7 +156,8 @@ curl http://localhost:8000/health
 - ✅ Integration Tests (end-to-end)
 - ✅ Scripts (setup, cleanup, load_dataset)
 - ✅ Documentation (5 guides)
-- ✅ All code: 100% CLAUDE.md compliant
+
+
 
 ### File Count
 - 35 files created
@@ -237,7 +238,6 @@ D:\\bureau\\grand projet\\PROJET 1\\
 
 ## 📊 Quality Metrics
 
-All Sprint 1 files evaluated with grille CLAUDE.md:
 
 | Metric | Target | Actual |
 |--------|--------|--------|
