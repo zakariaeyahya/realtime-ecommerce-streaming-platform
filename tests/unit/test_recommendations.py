@@ -2,6 +2,7 @@
 
 import pytest
 from unittest.mock import Mock, MagicMock
+from processing.flink_jobs.recommendations import RecommendationsJob
 
 
 class TestRecommendationsJob:
