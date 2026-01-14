@@ -1,0 +1,102 @@
+{
+  "type": "record",
+  "name": "InventoryChange",
+  "namespace": "com.ecommerce.inventory",
+  "doc": "Schéma Avro pour les changements d'inventaire en temps réel",
+  "fields": [
+    {
+      "name": "change_id",
+      "type": "string",
+      "doc": "Identifiant unique du changement d'inventaire (UUID)"
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "Timestamp du changement en millisecondes depuis epoch"
+    },
+    {
+      "name": "item_id",
+      "type": "string",
+      "doc": "Identifiant du produit"
+    },
+    {
+      "name": "warehouse_id",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Identifiant de l'entrepôt"
+    },
+    {
+      "name": "change_type",
+      "type": {
+        "type": "enum",
+        "name": "ChangeType",
+        "symbols": ["stock_in", "stock_out", "adjustment", "reservation", "release"]
+      },
+      "doc": "Type de changement d'inventaire"
+    },
+    {
+      "name": "quantity_before",
+      "type": "int",
+      "doc": "Quantité en stock avant le changement"
+    },
+    {
+      "name": "quantity_change",
+      "type": "int",
+      "doc": "Delta de quantité (positif ou négatif)"
+    },
+    {
+      "name": "quantity_after",
+      "type": "int",
+      "doc": "Quantité en stock après le changement"
+    },
+    {
+      "name": "reason",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Raison du changement (vente, retour, ajustement, etc.)"
+    },
+    {
+      "name": "reference_id",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "ID de référence (commande, transaction, etc.)"
+    },
+    {
+      "name": "category",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Catégorie du produit"
+    },
+    {
+      "name": "unit_cost",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Coût unitaire du produit"
+    },
+    {
+      "name": "location",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Localisation dans l'entrepôt (rayon, étagère, etc.)"
+    },
+    {
+      "name": "operator_id",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Identifiant de l'opérateur ayant effectué le changement"
+    },
+    {
+      "name": "metadata",
+      "type": [
+        "null",
+        {
+          "type": "map",
+          "values": "string"
+        }
+      ],
+      "default": null,
+      "doc": "Métadonnées additionnelles (clé-valeur)"
+    }
+  ]
+}

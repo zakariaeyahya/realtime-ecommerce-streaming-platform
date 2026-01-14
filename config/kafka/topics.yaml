@@ -1,0 +1,79 @@
+# ============================================================================
+# Kafka Topics Configuration - E-Commerce Real-Time Platform
+# ============================================================================
+# Ce fichier définit tous les topics Kafka et leurs configurations
+# Utilisé pour la création automatique des topics via scripts
+
+topics:
+  # Topic principal pour tous les événements e-commerce bruts
+  - name: raw-events
+    partitions: 3
+    replication_factor: 1
+    config:
+      retention.ms: 604800000  # 7 jours
+      compression.type: snappy
+      cleanup.policy: delete
+      min.insync.replicas: 1
+      segment.ms: 86400000  # 1 jour
+    description: "Événements e-commerce en temps réel (view, addtocart, transaction, search, filter, review)"
+
+  # Topic pour les changements d'inventaire
+  - name: inventory-changes
+    partitions: 2
+    replication_factor: 1
+    config:
+      retention.ms: 2592000000  # 30 jours
+      compression.type: snappy
+      cleanup.policy: delete
+      min.insync.replicas: 1
+      segment.ms: 86400000  # 1 jour
+    description: "Changements d'inventaire en temps réel (stock_in, stock_out, adjustment)"
+
+  # Topic pour les scores de fraude (Sprint 4)
+  - name: fraud-scores
+    partitions: 2
+    replication_factor: 1
+    config:
+      retention.ms: 604800000  # 7 jours
+      compression.type: snappy
+      cleanup.policy: delete
+      min.insync.replicas: 1
+    description: "Scores de détection de fraude pour chaque transaction"
+
+  # Topic pour les recommandations (Sprint 5)
+  - name: recommendations
+    partitions: 2
+    replication_factor: 1
+    config:
+      retention.ms: 86400000  # 24 heures
+      compression.type: snappy
+      cleanup.policy: delete
+      min.insync.replicas: 1
+    description: "Recommandations de produits générées en temps réel"
+
+  # Topic pour les métriques business (Sprint 6)
+  - name: business-metrics
+    partitions: 1
+    replication_factor: 1
+    config:
+      retention.ms: 2592000000  # 30 jours
+      compression.type: snappy
+      cleanup.policy: compact
+      min.insync.replicas: 1
+    description: "Métriques business agrégées (revenus, taux conversion, etc.)"
+
+# ============================================================================
+# Configuration par défaut pour tous les topics
+# ============================================================================
+default_config:
+  auto.create.topics.enable: false
+  log.retention.check.interval.ms: 300000
+  message.max.bytes: 1048576  # 1 MB
+
+# ============================================================================
+# Notes de déploiement
+# ============================================================================
+# - En production, augmenter replication_factor à 3
+# - Ajuster les partitions selon le volume de trafic
+# - Monitorer la taille des segments et ajuster segment.ms si nécessaire
+# - Utiliser cleanup.policy: compact pour les topics d'état (business-metrics)

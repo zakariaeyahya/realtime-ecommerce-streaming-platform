@@ -1,0 +1,123 @@
+{
+  "type": "record",
+  "name": "EcommerceEvent",
+  "namespace": "com.ecommerce.events",
+  "doc": "Schéma Avro pour les événements e-commerce en temps réel",
+  "fields": [
+    {
+      "name": "event_id",
+      "type": "string",
+      "doc": "Identifiant unique de l'événement (UUID)"
+    },
+    {
+      "name": "event_type",
+      "type": {
+        "type": "enum",
+        "name": "EventType",
+        "symbols": ["view", "addtocart", "transaction", "search", "filter", "review"]
+      },
+      "doc": "Type d'événement e-commerce"
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "logicalType": "timestamp-millis",
+      "doc": "Timestamp de l'événement en millisecondes depuis epoch"
+    },
+    {
+      "name": "user_id",
+      "type": "string",
+      "doc": "Identifiant unique de l'utilisateur"
+    },
+    {
+      "name": "session_id",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Identifiant de session utilisateur"
+    },
+    {
+      "name": "item_id",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Identifiant du produit (pour view, addtocart, transaction, review)"
+    },
+    {
+      "name": "category",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Catégorie du produit"
+    },
+    {
+      "name": "price",
+      "type": ["null", "double"],
+      "default": null,
+      "doc": "Prix du produit (pour transaction)"
+    },
+    {
+      "name": "quantity",
+      "type": ["null", "int"],
+      "default": null,
+      "doc": "Quantité achetée (pour transaction)"
+    },
+    {
+      "name": "search_query",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Requête de recherche (pour search)"
+    },
+    {
+      "name": "filter_type",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Type de filtre appliqué (pour filter)"
+    },
+    {
+      "name": "filter_value",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Valeur du filtre (pour filter)"
+    },
+    {
+      "name": "rating",
+      "type": ["null", "int"],
+      "default": null,
+      "doc": "Note donnée (1-5, pour review)"
+    },
+    {
+      "name": "review_text",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Texte de l'avis (pour review)"
+    },
+    {
+      "name": "device_type",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Type d'appareil (desktop, mobile, tablet)"
+    },
+    {
+      "name": "ip_address",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "Adresse IP de l'utilisateur"
+    },
+    {
+      "name": "user_agent",
+      "type": ["null", "string"],
+      "default": null,
+      "doc": "User-Agent du navigateur"
+    },
+    {
+      "name": "metadata",
+      "type": [
+        "null",
+        {
+          "type": "map",
+          "values": "string"
+        }
+      ],
+      "default": null,
+      "doc": "Métadonnées additionnelles (clé-valeur)"
+    }
+  ]
+}
