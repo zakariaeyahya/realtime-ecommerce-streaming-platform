@@ -79,7 +79,7 @@ def main() -> int:
                        default='retail_rocket', help='Source de données')
     parser.add_argument('--csv', help='Chemin vers le fichier CSV')
     parser.add_argument('--orders', help='Chemin vers orders.csv (Instacart/Olist)')
-    parser.add_argument('--events', type=int, default=10000, help='Nombre d\'événements à charger')
+    parser.add_argument('--events', type=int, default=None, help='Nombre d\'événements à charger (défaut: tous)')
     parser.add_argument('--speed', type=float, default=1.0, help='Multiplicateur de vitesse')
     parser.add_argument('--brokers', default='localhost:9092', help='Serveur Kafka')
 
