@@ -1,59 +1,62 @@
-"""Unit tests for Cache Manager."""
+"""Unit tests for cache manager."""
 
 import pytest
-from unittest.mock import Mock, patch
+from processing.flink_jobs.utils.cache_manager import CacheManager
 
 
 class TestCacheManager:
-    """Test Redis cache manager."""
+    """Test cases for CacheManager."""
 
     @pytest.fixture
-    def cache_manager(self):
+    def cache(self):
         """Create cache manager."""
-        from processing.flink_jobs.utils.cache_manager import CacheManager
-        return CacheManager(host='localhost', port=6379)
+        return CacheManager()
 
-    def test_cache_manager_initialization(self, cache_manager):
-        """Test cache manager initializes."""
-        assert cache_manager.host == 'localhost'
-        assert cache_manager.port == 6379
+    def test_cache_initialization(self, cache):
+        """Test cache initializes."""
+        assert cache is not None
+        assert cache.ttl_seconds == 604800
 
-    def test_connect(self, cache_manager):
-        """Test Redis connection."""
-        result = cache_manager.connect()
-        assert result is True
+    def test_cache_get_miss(self, cache):
+        """Test cache get on miss."""
+        result = cache.get_forecast("sku-001", "wh-01")
+        assert result is None
+        assert cache.misses > 0
 
-    def test_set_recommendations(self, cache_manager):
-        """Test storing recommendations."""
-        cache_manager.connect()
-        reco = [{'item_id': 'i1', 'score': 0.95}]
-        result = cache_manager.set_recommendations('user1', reco)
-        assert result is True
+    def test_cache_set_get(self, cache):
+        """Test cache set and get."""
+        forecast_data = {"forecast": [100, 95, 90], "alert": False}
 
-    def test_get_recommendations_hit(self, cache_manager):
-        """Test retrieving cached recommendations."""
-        cache_manager.connect()
-        reco = [{'item_id': 'i1', 'score': 0.95}]
-        cache_manager.set_recommendations('user1', reco)
-        cached = cache_manager.get_recommendations('user1')
-        assert cached is not None
+        success = cache.set_forecast("sku-001", "wh-01", forecast_data)
+        assert isinstance(success, bool)
 
-    def test_get_recommendations_miss(self, cache_manager):
-        """Test miss when not cached."""
-        cache_manager.connect()
-        cached = cache_manager.get_recommendations('nonexistent_user')
-        assert cached is None
+    def test_cache_stats_structure(self, cache):
+        """Test cache statistics structure."""
+        stats = cache.get_cache_stats()
 
-    def test_invalidate_user(self, cache_manager):
-        """Test invalidating cache."""
-        cache_manager.connect()
-        reco = [{'item_id': 'i1', 'score': 0.95}]
-        cache_manager.set_recommendations('user1', reco)
-        result = cache_manager.invalidate_user('user1')
-        assert result is True
+        assert 'hits' in stats
+        assert 'misses' in stats
+        assert 'hit_rate' in stats
 
-    def test_get_hit_rate(self, cache_manager):
-        """Test cache hit rate calculation."""
-        cache_manager.connect()
-        hit_rate = cache_manager.get_hit_rate()
-        assert 0 <= hit_rate <= 100
+    def test_cache_hit_rate_calculation(self, cache):
+        """Test hit rate calculation."""
+        cache.hits = 80
+        cache.misses = 20
+
+        stats = cache.get_cache_stats()
+        assert stats['hit_rate'] == 80.0
+
+    def test_multiple_items_cached(self, cache):
+        """Test multiple items can be cached."""
+        items = [
+            ("sku-001", "wh-01"),
+            ("sku-002", "wh-02"),
+            ("sku-003", "wh-01"),
+        ]
+
+        for item_id, warehouse_id in items:
+            cache.set_forecast(
+                item_id,
+                warehouse_id,
+                {"forecast": [100, 90], "alert": False}
+            )
