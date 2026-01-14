@@ -150,15 +150,15 @@ def event_producer_instance(monkeypatch, mock_kafka_producer):
     Returns:
         Instance de KafkaEventProducer avec Producer mocké
     """
-    def mock_producer_init(*args, **kwargs):
-        return mock_kafka_producer
-
+    # Patch au niveau du module qui utilise Producer
     monkeypatch.setattr(
-        'confluent_kafka.Producer',
-        mock_producer_init
+        'ingestion.producer.Producer',
+        lambda *args, **kwargs: mock_kafka_producer
     )
 
     producer = KafkaEventProducer(brokers='localhost:9092')
+    # Assure que le mock est accessible
+    producer.producer = mock_kafka_producer
     return producer
 
 
@@ -173,15 +173,15 @@ def event_consumer_instance(monkeypatch, mock_kafka_consumer):
     Returns:
         Instance de KafkaEventConsumer avec Consumer mocké
     """
-    def mock_consumer_init(*args, **kwargs):
-        return mock_kafka_consumer
-
+    # Patch au niveau du module qui utilise Consumer
     monkeypatch.setattr(
-        'confluent_kafka.Consumer',
-        mock_consumer_init
+        'ingestion.basic_consumer.Consumer',
+        lambda *args, **kwargs: mock_kafka_consumer
     )
 
     consumer = KafkaEventConsumer(brokers='localhost:9092')
+    # Assure que le mock est accessible
+    consumer.consumer = mock_kafka_consumer
     return consumer
 
 

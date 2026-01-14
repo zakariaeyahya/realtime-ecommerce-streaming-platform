@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 class TestKafkaIntegration:
     """Tests d'intégration Producer/Consumer."""
 
-    @pytest.mark.skip(reason="Nécessite Kafka en cours d'exécution")
     def test_should_send_and_receive_event_end_to_end(self, kafka_broker_url):
         """Test complet: génération -> envoi -> réception."""
         producer = KafkaEventProducer(brokers=kafka_broker_url)
@@ -46,7 +45,6 @@ class TestKafkaIntegration:
         consumer.close()
         producer.close()
 
-    @pytest.mark.skip(reason="Nécessite Kafka en cours d'exécution")
     def test_should_handle_high_throughput(self, kafka_broker_url):
         """Test de performance: envoi de 1000 événements."""
         producer = KafkaEventProducer(brokers=kafka_broker_url, speed_multiplier=100.0)
