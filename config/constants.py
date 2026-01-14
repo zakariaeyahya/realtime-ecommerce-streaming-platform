@@ -219,10 +219,36 @@ RETRY_BACKOFF_MULTIPLIER: float = 2.0
 RETRY_BASE_DELAY: float = 1.0  # Secondes
 
 # ============================================================================
-# FRAUD DETECTION (Pour Sprint 4)
+# FLINK FRAUD DETECTION (Sprint 3)
 # ============================================================================
 
+# Fraud Thresholds
 FRAUD_THRESHOLD: float = float(os.getenv('FRAUD_THRESHOLD', '0.85'))
+FRAUD_MIN_FEATURES: int = int(os.getenv('FRAUD_MIN_FEATURES', '90'))
+
+# Model Configuration
+FRAUD_MODEL_PATH: str = os.getenv('FRAUD_MODEL_PATH', 'processing/models/fraud_model.pkl')
+FRAUD_MODEL_VERSION: str = os.getenv('FRAUD_MODEL_VERSION', '1.0')
+
+# Flink Configuration
+FLINK_PARALLELISM: int = int(os.getenv('FLINK_PARALLELISM', '4'))  # Local: 4, Production: 48
+FLINK_CHECKPOINT_INTERVAL_MS: int = int(os.getenv('FLINK_CHECKPOINT_INTERVAL_MS', '30000'))
+FLINK_STATE_BACKEND: str = os.getenv('FLINK_STATE_BACKEND', 'memory')  # memory or rocksdb
+FLINK_WINDOW_SIZE_SECONDS: int = int(os.getenv('FLINK_WINDOW_SIZE_SECONDS', '300'))  # 5 minutes
+
+# Feature Engineering
+FEATURE_NORMALIZATION_METHOD: str = os.getenv('FEATURE_NORMALIZATION_METHOD', 'minmax')  # minmax or zscore
+FEATURE_AGGREGATION_WINDOW: int = int(os.getenv('FEATURE_AGGREGATION_WINDOW', '300'))  # seconds
+
+# Performance Thresholds
+MAX_PROCESSING_LATENCY_MS: int = int(os.getenv('MAX_PROCESSING_LATENCY_MS', '500'))
+MIN_THROUGHPUT_EVENTS_PER_SEC: int = int(os.getenv('MIN_THROUGHPUT_EVENTS_PER_SEC', '1000'))
+
+# Redis Cache (for fraud scores)
+REDIS_HOST: str = os.getenv('REDIS_HOST', 'localhost')
+REDIS_PORT: int = int(os.getenv('REDIS_PORT', '6379'))
+REDIS_DB: int = int(os.getenv('REDIS_DB', '0'))
+REDIS_FRAUD_TTL_SECONDS: int = int(os.getenv('REDIS_FRAUD_TTL_SECONDS', '86400'))  # 24 hours
 
 # ============================================================================
 # ENVIRONMENT
