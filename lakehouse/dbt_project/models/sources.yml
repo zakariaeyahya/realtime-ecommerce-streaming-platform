@@ -1,0 +1,33 @@
+version: 2
+
+sources:
+  - name: kafka
+    description: Raw data from Apache Kafka topics
+    database: default
+    schema: default
+    tables:
+      - name: events
+        description: User interaction events
+        columns:
+          - name: event_id
+            description: Unique event identifier
+            tests:
+              - unique
+              - not_null
+
+      - name: fraud_scores
+        description: Fraud detection scores
+        columns:
+          - name: event_id
+            description: Event being scored
+            tests:
+              - unique
+              - not_null
+
+      - name: inventory
+        description: Inventory changes
+        columns:
+          - name: product_id
+            description: Product identifier
+            tests:
+              - not_null

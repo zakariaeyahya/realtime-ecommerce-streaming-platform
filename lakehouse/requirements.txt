@@ -1,0 +1,23 @@
+# lakehouse/requirements.txt
+
+# Iceberg
+pyiceberg==0.5.1
+boto3==1.26.137
+
+# dbt
+dbt-core==1.5.3
+dbt-spark==1.5.3
+
+# Spark
+pyspark==3.4.1
+
+# Data Processing
+pandas==2.0.3
+numpy==1.24.3
+
+# Testing
+pytest==7.4.0
+pytest-spark==0.6.0
+
+# Utilities
+python-dotenv==1.0.0

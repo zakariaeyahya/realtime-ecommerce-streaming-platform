@@ -1,0 +1,24 @@
+iceberg:
+  target: 'iceberg_local'
+  outputs:
+    iceberg_local:
+      type: 'spark'
+      method: 'session'
+      host: 'localhost'
+      port: 7077
+      user: 'dbt'
+      threads: 4
+
+      # Iceberg catalog configuration
+      catalog: 'iceberg'
+      schema: 'default'
+
+      # Spark config
+      [session-args]
+        spark.sql.catalog.iceberg: org.apache.iceberg.spark.SparkCatalog
+        spark.sql.catalog.iceberg.type: hadoop
+        spark.sql.catalog.iceberg.warehouse: s3a://iceberg-warehouse
+        spark.hadoop.fs.s3a.endpoint: http://minio:9000
+        spark.hadoop.fs.s3a.access.key: minioadmin
+        spark.hadoop.fs.s3a.secret.key: minioadmin
+        spark.hadoop.fs.s3a.path.style.access: true
