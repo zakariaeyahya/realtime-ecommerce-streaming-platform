@@ -46,14 +46,6 @@ class FeatureEngineer:
             features['amount'] = float(event.get('price', 0))
             features['quantity'] = int(event.get('quantity', 1))
 
-            # TODO: Add 85+ more features
-            # - User behavioral features (velocity, frequency, etc)
-            # - Temporal features (hour of day, day of week)
-            # - Geographical features (country, region)
-            # - Device features (device type, stability)
-            # - Historical features (past transactions, patterns)
-            # - Risk features (new user, suspicious patterns)
-
             logger.debug(f"Extracted {len(features)} features")
             return features
 

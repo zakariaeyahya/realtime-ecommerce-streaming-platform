@@ -101,7 +101,6 @@ class ModelLoader:
         Returns:
             List of feature values in model's expected order
         """
-        # TODO: Implement proper feature ordering
         return list(features.values())
 
     def _get_model_version(self) -> str:

@@ -73,6 +73,13 @@ class FraudDetectionJob:
         try:
             env = self.create_environment()
 
+            # TODO: Add Kafka source
+            # TODO: Add windowing (5 min tumbling)
+            # TODO: Add feature engineering
+            # TODO: Add ML model scoring
+            # TODO: Add fraud detection logic
+            # TODO: Add output to Redis and Kafka
+
             logger.info("Executing job...")
             env.execute("FraudDetectionJob")
 

@@ -1,93 +1,192 @@
 version: '3.8'
 
 services:
-  # Zookeeper - Coordination pour Kafka
+  # Zookeeper (Kafka coordination)
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
-    container_name: ecommerce-zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
     ports:
       - "2181:2181"
     networks:
-      - ecommerce-network
+      - data-platform
     healthcheck:
-      test: echo ruok | nc localhost 2181 || exit 1
+      test: echo ruok | nc localhost 2181
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Kafka Broker
+  # Kafka (Event Streaming)
   kafka:
     image: confluentinc/cp-kafka:7.5.0
-    container_name: ecommerce-kafka
     depends_on:
       zookeeper:
         condition: service_healthy
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
-      KAFKA_LOG_RETENTION_HOURS: 168
-      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
     ports:
       - "9092:9092"
-      - "29092:29092"
     networks:
-      - ecommerce-network
+      - data-platform
     healthcheck:
-      test: kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1
+      test: kafka-topics --list --bootstrap-server localhost:9092
       interval: 10s
-      timeout: 10s
+      timeout: 5s
       retries: 5
 
-  # Schema Registry (pour Avro - Sprint 2)
+  # Schema Registry
   schema-registry:
     image: confluentinc/cp-schema-registry:7.5.0
-    container_name: ecommerce-schema-registry
     depends_on:
       kafka:
         condition: service_healthy
     environment:
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:29092
-      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka:9092'
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8086
     ports:
-      - "8081:8081"
+      - "8086:8086"
     networks:
-      - ecommerce-network
+      - data-platform
     healthcheck:
-      test: curl -f http://localhost:8081/ || exit 1
+      test: curl -f http://localhost:8086/subjects || exit 1
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Kafka UI (optionnel - pour monitoring)
+  # Kafka UI
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
-    container_name: ecommerce-kafka-ui
     depends_on:
-      - kafka
-      - schema-registry
+      kafka:
+        condition: service_healthy
     environment:
       KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
-      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8086
     ports:
       - "8080:8080"
     networks:
-      - ecommerce-network
+      - data-platform
+
+  # Redis (In-Memory Cache)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6381:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - data-platform
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  # Flink JobManager
+  jobmanager:
+    build:
+      context: ./processing
+      dockerfile: Dockerfile
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: jobmanager
+    environment:
+      JOB_MANAGER_RPC_ADDRESS: jobmanager
+      FLINK_PROPERTIES: |
+        parallelism.default: 4
+        state.backend: rocksdb
+        state.checkpoints.dir: file:///flink/checkpoints
+        state.savepoints.dir: file:///flink/savepoints
+    ports:
+      - "6123:6123"
+      - "8081:8081"
+    networks:
+      - data-platform
+    volumes:
+      - flink_checkpoints:/flink/checkpoints
+      - flink_savepoints:/flink/savepoints
+      - ${PROJECT_PATH}/processing:/flink/jobs
+      - ${PROJECT_PATH}/config:/flink/config
+      - ${PROJECT_PATH}/tests:/flink/tests
+    healthcheck:
+      test: curl -f http://localhost:8081/jobs || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Flink TaskManager 1
+  taskmanager-1:
+    build:
+      context: ./processing
+      dockerfile: Dockerfile
+    depends_on:
+      jobmanager:
+        condition: service_healthy
+    command: taskmanager
+    environment:
+      JOB_MANAGER_RPC_ADDRESS: jobmanager
+      FLINK_PROPERTIES: |
+        parallelism.default: 4
+        state.backend: rocksdb
+        taskmanager.numberOfTaskSlots: 4
+    networks:
+      - data-platform
+    volumes:
+      - flink_checkpoints:/flink/checkpoints
+      - ${PROJECT_PATH}/processing:/flink/jobs
+      - ${PROJECT_PATH}/config:/flink/config
+      - ${PROJECT_PATH}/tests:/flink/tests
+    healthcheck:
+      test: curl -f http://localhost:8084/ || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Flink TaskManager 2
+  taskmanager-2:
+    build:
+      context: ./processing
+      dockerfile: Dockerfile
+    depends_on:
+      jobmanager:
+        condition: service_healthy
+    command: taskmanager
+    environment:
+      JOB_MANAGER_RPC_ADDRESS: jobmanager
+      FLINK_PROPERTIES: |
+        parallelism.default: 4
+        state.backend: rocksdb
+        taskmanager.numberOfTaskSlots: 4
+    networks:
+      - data-platform
+    volumes:
+      - flink_checkpoints:/flink/checkpoints
+      - ${PROJECT_PATH}/processing:/flink/jobs
+      - ${PROJECT_PATH}/config:/flink/config
+      - ${PROJECT_PATH}/tests:/flink/tests
+    healthcheck:
+      test: curl -f http://localhost:8084/ || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 networks:
-  ecommerce-network:
+  data-platform:
     driver: bridge
 
 volumes:
-  zookeeper-data:
-  kafka-data:
+  redis_data:
+  flink_checkpoints:
+  flink_savepoints:
