@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Initialize Apache Iceberg catalog with MinIO backend."""
 
 import logging
@@ -22,10 +23,10 @@ def initialize_iceberg_catalog() -> Dict:
         'client.secret-access-key': 'minioadmin',
     }
 
-    # Créer bucket si n'existe pas
+    # Create bucket if it doesn't exist
     s3_client = boto3.client(
         's3',
-        endpoint_url='http://localhost:9000',
+        endpoint_url='http://localhost:9010',
         aws_access_key_id='minioadmin',
         aws_secret_access_key='minioadmin',
         region_name='us-east-1'
