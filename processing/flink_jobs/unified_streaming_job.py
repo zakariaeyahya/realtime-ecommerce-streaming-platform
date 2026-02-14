@@ -1,34 +1,34 @@
 """
-Unified Streaming Job - Combines 3 Processing Pipelines
+Unified Streaming Job - Combines 3 Processing Pipelines (Full Kafka Version)
 
 Architecture:
     Kafka (raw-events)
-        ↓
+        |
     Parse & Enrich Event
-        ↓
-    ├─→ Branch 1: Fraud Detection
-    │   └─→ Kafka (fraud-scores) + Redis (fraud:*)
-    │
-    ├─→ Branch 2: Recommendations
-    │   └─→ Kafka (recommendations) + Redis (recommendation:*)
-    │
-    └─→ Branch 3: Inventory Forecasting
-        └─→ Kafka (inventory-forecasts) + Redis (inventory:*)
+        |
+    +---> Branch 1: Fraud Detection
+    |   +---> Kafka (fraud-scores)
+    |
+    +---> Branch 2: Recommendations
+    |   +---> Kafka (recommendations)
+    |
+    +---> Branch 3: Inventory Forecasting
+        +---> Kafka (inventory-changes)
 
 Features:
 - Parallel processing of 3 independent jobs
-- Real-time fraud scoring (90+ features)
+- Real-time fraud scoring
 - Personalized recommendations (session-based)
-- Inventory forecasting (time-series prediction)
-- Redis caching for fast lookup
-- Kafka output for downstream systems
+- Inventory forecasting
+- Kafka input/output for real streaming
 """
 
 import logging
-from typing import Dict, Optional
-from datetime import datetime
+import os
 import json
 import sys
+from typing import Dict
+from datetime import datetime
 from pathlib import Path
 
 # Add project root to Python path
@@ -39,21 +39,19 @@ logger = logging.getLogger(__name__)
 
 
 class UnifiedStreamingJob:
-    """Main unified streaming job combining 3 processing pipelines."""
+    """Main unified streaming job combining 3 processing pipelines with Kafka."""
 
     def __init__(self):
         """Initialize unified job with configuration."""
         from config.constants import (
             FRAUD_THRESHOLD,
-            FRAUD_MIN_FEATURES,
-            KAFKA_BROKERS,
             KAFKA_TOPICS,
         )
 
         self.fraud_threshold = FRAUD_THRESHOLD
-        self.fraud_min_features = FRAUD_MIN_FEATURES
-        self.kafka_brokers = KAFKA_BROKERS
         self.kafka_topics = KAFKA_TOPICS
+        # Inside Docker: kafka:9092, outside: localhost:9092
+        self.kafka_brokers = os.getenv("KAFKA_BROKERS", "kafka:9092")
 
         logger.info(
             f"UnifiedStreamingJob initialized "
@@ -66,19 +64,18 @@ class UnifiedStreamingJob:
         Returns:
             StreamExecutionEnvironment configured for unified processing
         """
-        try:
-            from pyflink.datastream import StreamExecutionEnvironment
+        from pyflink.datastream import StreamExecutionEnvironment
+        from pyflink.common import Configuration
 
-            env = StreamExecutionEnvironment.get_execution_environment()
-            env.set_parallelism(4)
-            env.enable_checkpointing(30000)  # 30 seconds
+        config = Configuration()
+        config.set_string("pipeline.jars", "file:///opt/flink/lib/flink-connector-kafka-3.0.1-1.18.jar;file:///opt/flink/lib/kafka-clients-3.6.0.jar")
 
-            logger.info("Flink environment created for unified job")
-            return env
+        env = StreamExecutionEnvironment.get_execution_environment(config)
+        env.set_parallelism(2)
+        env.enable_checkpointing(30000)  # 30 seconds
 
-        except ImportError as e:
-            logger.error(f"Flink import error: {e}")
-            raise
+        logger.info("Flink environment created for unified job")
+        return env
 
     def create_kafka_source(self, env):
         """Create Kafka source for raw events.
@@ -89,40 +86,45 @@ class UnifiedStreamingJob:
         Returns:
             DataStream of raw events from Kafka
         """
-        try:
-            from pyflink.datastream.connectors.kafka import FlinkKafkaConsumer
-            from pyflink.datastream.functions import MapFunction
-            from pyflink.common.serialization import SimpleStringSchema
+        from pyflink.datastream.connectors.kafka import KafkaSource, KafkaOffsetsInitializer
+        from pyflink.common.serialization import SimpleStringSchema
+        from pyflink.datastream.functions import MapFunction
+        from pyflink.common.watermark_strategy import WatermarkStrategy
 
-            # Kafka consumer configuration
-            kafka_consumer = FlinkKafkaConsumer(
-                self.kafka_topics["events"],
-                SimpleStringSchema(),
-                {"bootstrap.servers": self.kafka_brokers},
-            )
+        topic = self.kafka_topics["events"]
 
-            # Add source to environment
-            kafka_stream = env.add_source(kafka_consumer)
+        kafka_source = (
+            KafkaSource.builder()
+            .set_bootstrap_servers(self.kafka_brokers)
+            .set_topics(topic)
+            .set_group_id("unified-streaming-job")
+            .set_starting_offsets(KafkaOffsetsInitializer.earliest())
+            .set_value_only_deserializer(SimpleStringSchema())
+            .set_property("partition.discovery.interval.ms", "10000")
+            .build()
+        )
 
-            # Parse JSON strings to dictionaries
-            class ParseEventFunction(MapFunction):
-                def map(self, value):
-                    try:
-                        return json.loads(value)
-                    except json.JSONDecodeError as e:
-                        logger.error(f"Failed to parse event: {value}, error: {e}")
-                        return None
+        kafka_stream = env.from_source(
+            kafka_source,
+            WatermarkStrategy.no_watermarks(),
+            "KafkaSource-raw-events",
+        )
 
-            events_stream = kafka_stream.map(ParseEventFunction()).filter(
-                lambda x: x is not None
-            )
+        # Parse JSON strings to dictionaries
+        class ParseEventFunction(MapFunction):
+            def map(self, value):
+                try:
+                    return json.loads(value)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse event: {e}")
+                    return None
 
-            logger.info(f"Kafka source created (topic={self.kafka_topics['events']})")
-            return events_stream
+        events_stream = kafka_stream.map(ParseEventFunction()).filter(
+            lambda x: x is not None
+        )
 
-        except Exception as e:
-            logger.error(f"Failed to create Kafka source: {e}")
-            raise
+        logger.info(f"Kafka source created (topic={topic})")
+        return events_stream
 
     def create_fraud_detection_branch(self, events_stream):
         """Create fraud detection branch.
@@ -131,64 +133,47 @@ class UnifiedStreamingJob:
             events_stream: Input stream of events
 
         Returns:
-            Stream of fraud detection results
+            Stream of fraud detection results as JSON strings
         """
-        try:
-            from pyflink.datastream.functions import MapFunction
-            from utils.feature_engineering import FeatureEngineer
+        from pyflink.datastream.functions import MapFunction
 
-            class FraudDetectionFunction(MapFunction):
-                def __init__(self, threshold):
-                    self.threshold = threshold
-                    self.feature_engineer = FeatureEngineer()
+        class FraudDetectionFunction(MapFunction):
+            def __init__(self, threshold):
+                self.threshold = threshold
 
-                def map(self, event):
-                    try:
-                        # Extract features
-                        features = self.feature_engineer.extract_features(event)
+            def map(self, event):
+                try:
+                    amount = float(event.get("amount", event.get("price", 0)))
+                    fraud_score = min(1.0, amount / 10000 if amount > 0 else 0)
+                    is_fraud = fraud_score > self.threshold
 
-                        # Calculate fraud score (mock - replace with real model)
-                        fraud_score = min(
-                            1.0,
-                            (
-                                features.get("amount", 0) / 10000
-                                if features.get("amount", 0) > 0
-                                else 0
-                            ),
+                    result = {
+                        "user_id": event.get("user_id", "unknown"),
+                        "fraud_score": round(fraud_score, 3),
+                        "is_fraud": is_fraud,
+                        "amount": amount,
+                        "timestamp": datetime.now().isoformat(),
+                        "alert": "FRAUD DETECTED" if is_fraud else "OK",
+                    }
+
+                    if is_fraud:
+                        logger.warning(
+                            f"[FRAUD] user={result['user_id']}, "
+                            f"score={result['fraud_score']}, amount={amount}"
                         )
 
-                        # Determine if fraud
-                        is_fraud = fraud_score > self.threshold
+                    return json.dumps(result)
 
-                        result = {
-                            "user_id": event.get("user_id", "unknown"),
-                            "fraud_score": round(fraud_score, 3),
-                            "is_fraud": is_fraud,
-                            "timestamp": datetime.now().isoformat(),
-                            "features_count": len(features),
-                        }
+                except Exception as e:
+                    logger.error(f"Fraud detection failed: {e}")
+                    return None
 
-                        logger.debug(
-                            f"Fraud detection: user={result['user_id']}, "
-                            f"score={result['fraud_score']}"
-                        )
+        fraud_stream = events_stream.map(
+            FraudDetectionFunction(self.fraud_threshold)
+        ).filter(lambda x: x is not None)
 
-                        return result
-
-                    except Exception as e:
-                        logger.error(f"Fraud detection failed: {e}")
-                        return None
-
-            fraud_stream = events_stream.map(
-                FraudDetectionFunction(self.fraud_threshold)
-            ).filter(lambda x: x is not None)
-
-            logger.info("Fraud detection branch created")
-            return fraud_stream
-
-        except Exception as e:
-            logger.error(f"Failed to create fraud detection branch: {e}")
-            raise
+        logger.info("Fraud detection branch created")
+        return fraud_stream
 
     def create_recommendations_branch(self, events_stream):
         """Create recommendations branch.
@@ -197,54 +182,44 @@ class UnifiedStreamingJob:
             events_stream: Input stream of events
 
         Returns:
-            Stream of recommendation results
+            Stream of recommendation results as JSON strings
         """
-        try:
-            from pyflink.datastream.functions import MapFunction
+        from pyflink.datastream.functions import MapFunction
 
-            class RecommendationsFunction(MapFunction):
-                def __init__(self):
-                    self.top_k = 5
+        class RecommendationsFunction(MapFunction):
+            def __init__(self):
+                self.top_k = 5
 
-                def map(self, event):
-                    try:
-                        # Generate mock recommendations
-                        user_id = event.get("user_id", "unknown")
+            def map(self, event):
+                try:
+                    user_id = event.get("user_id", "unknown")
+                    item_id = event.get("item_id", event.get("product_id", ""))
 
-                        # In production: use ML model to generate recommendations
-                        recommendations = [
-                            {"product_id": f"SKU{i:04d}", "score": 0.9 - (i * 0.1)}
-                            for i in range(1, self.top_k + 1)
-                        ]
+                    recommendations = [
+                        {"product_id": f"SKU{i:04d}", "score": round(0.95 - (i * 0.15), 2)}
+                        for i in range(1, self.top_k + 1)
+                    ]
 
-                        result = {
-                            "user_id": user_id,
-                            "recommendations": recommendations,
-                            "timestamp": datetime.now().isoformat(),
-                            "count": len(recommendations),
-                        }
+                    result = {
+                        "user_id": user_id,
+                        "source_item": item_id,
+                        "recommendations": recommendations,
+                        "timestamp": datetime.now().isoformat(),
+                        "count": len(recommendations),
+                    }
 
-                        logger.debug(
-                            f"Recommendations: user={user_id}, "
-                            f"count={result['count']}"
-                        )
+                    return json.dumps(result)
 
-                        return result
+                except Exception as e:
+                    logger.error(f"Recommendations failed: {e}")
+                    return None
 
-                    except Exception as e:
-                        logger.error(f"Recommendations failed: {e}")
-                        return None
+        recommendations_stream = events_stream.map(
+            RecommendationsFunction()
+        ).filter(lambda x: x is not None)
 
-            recommendations_stream = events_stream.map(
-                RecommendationsFunction()
-            ).filter(lambda x: x is not None)
-
-            logger.info("Recommendations branch created")
-            return recommendations_stream
-
-        except Exception as e:
-            logger.error(f"Failed to create recommendations branch: {e}")
-            raise
+        logger.info("Recommendations branch created")
+        return recommendations_stream
 
     def create_inventory_branch(self, events_stream):
         """Create inventory forecasting branch.
@@ -253,107 +228,103 @@ class UnifiedStreamingJob:
             events_stream: Input stream of events
 
         Returns:
-            Stream of inventory forecast results
+            Stream of inventory forecast results as JSON strings
         """
-        try:
-            from pyflink.datastream.functions import MapFunction
+        from pyflink.datastream.functions import MapFunction
 
-            class InventoryForecastFunction(MapFunction):
-                def __init__(self):
-                    self.alert_threshold = 100
+        class InventoryForecastFunction(MapFunction):
+            def __init__(self):
+                self.alert_threshold = 100
 
-                def map(self, event):
-                    try:
-                        # Extract inventory-related info
-                        product_id = event.get("product_id", "UNKNOWN")
-                        quantity = event.get("quantity", 1)
+            def map(self, event):
+                try:
+                    product_id = event.get("product_id", event.get("item_id", "UNKNOWN"))
+                    quantity = int(event.get("quantity", 1))
 
-                        # In production: use time-series forecasting (Prophet/ARIMA)
-                        # This is a mock forecast
-                        forecast = {
-                            "product_id": product_id,
-                            "current_quantity": quantity,
-                            "forecast_7days": max(0, quantity - (quantity * 0.1)),
-                            "alert": quantity < self.alert_threshold,
-                            "timestamp": datetime.now().isoformat(),
-                        }
+                    forecast_qty = max(0, quantity - int(quantity * 0.1))
+                    needs_reorder = forecast_qty < self.alert_threshold
 
-                        logger.debug(
-                            f"Inventory forecast: product={product_id}, "
-                            f"qty={quantity}"
-                        )
+                    result = {
+                        "product_id": product_id,
+                        "current_quantity": quantity,
+                        "forecast_7days": forecast_qty,
+                        "needs_reorder": needs_reorder,
+                        "timestamp": datetime.now().isoformat(),
+                        "alert": "REORDER NEEDED" if needs_reorder else "OK",
+                    }
 
-                        return forecast
+                    return json.dumps(result)
 
-                    except Exception as e:
-                        logger.error(f"Inventory forecasting failed: {e}")
-                        return None
+                except Exception as e:
+                    logger.error(f"Inventory forecasting failed: {e}")
+                    return None
 
-            inventory_stream = events_stream.map(
-                InventoryForecastFunction()
-            ).filter(lambda x: x is not None)
+        inventory_stream = events_stream.map(
+            InventoryForecastFunction()
+        ).filter(lambda x: x is not None)
 
-            logger.info("Inventory forecasting branch created")
-            return inventory_stream
-
-        except Exception as e:
-            logger.error(f"Failed to create inventory branch: {e}")
-            raise
+        logger.info("Inventory forecasting branch created")
+        return inventory_stream
 
     def add_kafka_sinks(self, fraud_stream, recommendations_stream, inventory_stream):
         """Add Kafka sinks to output branches.
+
+        Args:
+            fraud_stream: Fraud detection results (JSON strings)
+            recommendations_stream: Recommendations results (JSON strings)
+            inventory_stream: Inventory forecast results (JSON strings)
+        """
+        from pyflink.datastream.connectors.kafka import KafkaSink, KafkaRecordSerializationSchema
+        from pyflink.common.serialization import SimpleStringSchema
+
+        def create_sink(topic: str) -> KafkaSink:
+            return (
+                KafkaSink.builder()
+                .set_bootstrap_servers(self.kafka_brokers)
+                .set_record_serializer(
+                    KafkaRecordSerializationSchema.builder()
+                    .set_topic(topic)
+                    .set_value_serialization_schema(SimpleStringSchema())
+                    .build()
+                )
+                .build()
+            )
+
+        # Fraud scores sink
+        fraud_stream.sink_to(create_sink(self.kafka_topics["fraud_scores"]))
+        logger.info(f"Fraud sink added (topic={self.kafka_topics['fraud_scores']})")
+
+        # Recommendations sink
+        recommendations_stream.sink_to(create_sink(self.kafka_topics["recommendations"]))
+        logger.info(f"Recommendations sink added (topic={self.kafka_topics['recommendations']})")
+
+        # Inventory sink
+        inventory_stream.sink_to(create_sink(self.kafka_topics["inventory"]))
+        logger.info(f"Inventory sink added (topic={self.kafka_topics['inventory']})")
+
+    def add_console_sinks(self, fraud_stream, recommendations_stream, inventory_stream):
+        """Add console print sinks for debugging.
 
         Args:
             fraud_stream: Fraud detection results
             recommendations_stream: Recommendations results
             inventory_stream: Inventory forecast results
         """
-        try:
-            from pyflink.datastream.connectors.kafka import FlinkKafkaProducer
-            from pyflink.common.serialization import SimpleStringSchema
-
-            class SerializeResultFunction:
-                def __call__(self, result):
-                    return json.dumps(result).encode("utf-8")
-
-            # Fraud scores sink
-            fraud_producer = FlinkKafkaProducer(
-                self.kafka_topics["fraud_scores"],
-                SerializeResultFunction(),
-                {"bootstrap.servers": self.kafka_brokers},
-            )
-            fraud_stream.add_sink(fraud_producer)
-            logger.info(f"Fraud scores sink added (topic={self.kafka_topics['fraud_scores']})")
-
-            # Recommendations sink
-            recommendations_producer = FlinkKafkaProducer(
-                self.kafka_topics["recommendations"],
-                SerializeResultFunction(),
-                {"bootstrap.servers": self.kafka_brokers},
-            )
-            recommendations_stream.add_sink(recommendations_producer)
-            logger.info(
-                f"Recommendations sink added (topic={self.kafka_topics['recommendations']})"
-            )
-
-            # Inventory forecasts sink
-            inventory_producer = FlinkKafkaProducer(
-                self.kafka_topics["inventory"],
-                SerializeResultFunction(),
-                {"bootstrap.servers": self.kafka_brokers},
-            )
-            inventory_stream.add_sink(inventory_producer)
-            logger.info(
-                f"Inventory sink added (topic={self.kafka_topics['inventory']})"
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to add Kafka sinks: {e}")
-            raise
+        fraud_stream.print(">> FRAUD: ")
+        recommendations_stream.print(">> RECO: ")
+        inventory_stream.print(">> INVENTORY: ")
+        logger.info("Console output sinks added (for debugging)")
 
     def run(self) -> None:
         """Execute the unified streaming job."""
-        logger.info("Starting Unified Streaming Job")
+        logger.info("=" * 80)
+        logger.info("Starting Unified Streaming Job (FULL - With Kafka)")
+        logger.info(f"Kafka brokers: {self.kafka_brokers}")
+        logger.info(f"Input topic: {self.kafka_topics['events']}")
+        logger.info(f"Output topics: {self.kafka_topics['fraud_scores']}, "
+                     f"{self.kafka_topics['recommendations']}, "
+                     f"{self.kafka_topics['inventory']}")
+        logger.info("=" * 80)
 
         try:
             # Create environment
@@ -363,16 +334,23 @@ class UnifiedStreamingJob:
             events_stream = self.create_kafka_source(env)
 
             # Create 3 parallel branches
+            logger.info("Creating 3 parallel processing branches...")
             fraud_stream = self.create_fraud_detection_branch(events_stream)
             recommendations_stream = self.create_recommendations_branch(events_stream)
             inventory_stream = self.create_inventory_branch(events_stream)
 
-            # Add Kafka sinks
+            # Add Kafka sinks (output to topics)
             self.add_kafka_sinks(fraud_stream, recommendations_stream, inventory_stream)
 
+            # Also add console sinks for debugging
+            self.add_console_sinks(fraud_stream, recommendations_stream, inventory_stream)
+
             # Execute job
-            logger.info("Executing unified streaming job...")
-            env.execute("UnifiedStreamingJob")
+            logger.info("=" * 80)
+            logger.info("Executing unified streaming job (streaming mode)...")
+            logger.info("Job will run continuously until stopped (Ctrl+C)")
+            logger.info("=" * 80)
+            env.execute("UnifiedStreamingJob-Kafka")
 
         except Exception as e:
             logger.error(f"Job execution failed: {e}")
