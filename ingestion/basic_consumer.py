@@ -6,12 +6,14 @@ depuis les topics Kafka et les traite.
 import json
 import logging
 import sys
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from confluent_kafka import Consumer, KafkaError, KafkaException
 
 # Ajout du répertoire parent au path pour importer config
-sys.path.insert(0, 'D:\\bureau\\grand projet\\PROJET 1')
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 from config.constants import (
     KAFKA_BROKERS,
     KAFKA_TOPICS,

@@ -5,11 +5,14 @@ Tests couvrant la consommation et validation d'événements e-commerce.
 import json
 import logging
 import sys
+from pathlib import Path
 from unittest.mock import Mock, MagicMock
 
 import pytest
 
-sys.path.insert(0, 'D:\\bureau\\grand projet\\PROJET 1')
+# Ajout du répertoire parent au path
+project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(project_root))
 from ingestion.basic_consumer import KafkaEventConsumer
 
 logger = logging.getLogger(__name__)

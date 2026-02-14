@@ -5,13 +5,15 @@ et d'intégration pour le producer et consumer Kafka.
 """
 import logging
 import sys
+from pathlib import Path
 from typing import Dict
 from unittest.mock import Mock, MagicMock
 
 import pytest
 
 # Ajout du répertoire parent au path
-sys.path.insert(0, 'D:\\bureau\\grand projet\\PROJET 1')
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
 from ingestion.producer import KafkaEventProducer
 from ingestion.basic_consumer import KafkaEventConsumer

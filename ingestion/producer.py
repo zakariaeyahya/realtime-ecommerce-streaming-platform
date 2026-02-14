@@ -14,9 +14,11 @@ from random import Random
 
 from confluent_kafka import Producer
 from faker import Faker
+from pathlib import Path
 
 # Ajout du répertoire parent au path pour importer config
-sys.path.insert(0, 'D:\\bureau\\grand projet\\PROJET 1')
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 from config.constants import (
     KAFKA_BROKERS,
     KAFKA_TOPICS,

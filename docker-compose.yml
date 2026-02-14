@@ -10,10 +10,11 @@ services:
     networks:
       - data-platform
     healthcheck:
-      test: echo ruok | nc localhost 2181
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: echo ruok | nc -w 1 localhost 2181 || exit 1
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
   # Kafka (Event Streaming)
   kafka:
@@ -119,10 +120,11 @@ services:
       - ${PROJECT_PATH}/config:/flink/config
       - ${PROJECT_PATH}/tests:/flink/tests
     healthcheck:
-      test: curl -f http://localhost:8081/jobs || exit 1
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: curl -f http://localhost:8081 2>/dev/null || exit 1
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
 
   # Flink TaskManager 1
   taskmanager-1:

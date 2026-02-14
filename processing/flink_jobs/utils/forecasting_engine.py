@@ -106,12 +106,22 @@ class ForecastingEngine:
             for p, a in zip(prophet_values, arima_values)
         ]
 
-        return {
+        result = {
             'values': ensemble_values,
-            'lower': [min(p, a) for p, a in zip(prophet['lower'], arima['lower'])],
-            'upper': [max(p, a) for p, a in zip(prophet['upper'], arima['upper'])],
             'accuracy': (prophet.get('accuracy', 0) + arima.get('accuracy', 0)) / 2,
         }
+
+        prophet_lower = prophet.get('lower', [])
+        arima_lower = arima.get('lower', [])
+        if prophet_lower and arima_lower:
+            result['lower'] = [min(p, a) for p, a in zip(prophet_lower, arima_lower)]
+
+        prophet_upper = prophet.get('upper', [])
+        arima_upper = arima.get('upper', [])
+        if prophet_upper and arima_upper:
+            result['upper'] = [max(p, a) for p, a in zip(prophet_upper, arima_upper)]
+
+        return result
 
     def _compute_runout_date(self, forecast: List[float], current_stock: float) -> str:
         """Calculate when inventory will hit zero.

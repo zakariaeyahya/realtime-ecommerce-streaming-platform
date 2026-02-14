@@ -12,20 +12,23 @@ RUN ln -s /usr/bin/python3.10 /usr/bin/python
 # Install Flink Python dependencies
 RUN pip install apache-flink==1.18.1
 
-# Download and install Kafka connector JAR with retry logic
+# Download Kafka connector and dependencies with retry logic
 # This allows PyFlink to use FlinkKafkaConsumer and FlinkKafkaProducer
 RUN mkdir -p /opt/flink/lib && \
     cd /opt/flink/lib && \
-    for attempt in 1 2 3; do \
-      echo "Download attempt $attempt..."; \
-      if curl -f -L -o flink-connector-kafka-1.18.1.jar \
-        https://repo1.maven.org/maven2/org/apache/flink/flink-connector-kafka/1.18.1/flink-connector-kafka-1.18.1.jar; then \
-        echo "Kafka connector downloaded successfully"; \
-        break; \
-      fi; \
-      sleep 5; \
-    done && \
-    test -f flink-connector-kafka-1.18.1.jar || \
-    echo "Warning: Could not download Kafka connector, continuing with basic Flink installation"
+    echo "Downloading Kafka Connector..." && \
+    curl -f -L -o flink-connector-kafka-3.0.1-1.18.jar \
+      https://repo1.maven.org/maven2/org/apache/flink/flink-connector-kafka/3.0.1-1.18/flink-connector-kafka-3.0.1-1.18.jar && \
+    echo "Downloading Kafka Clients..." && \
+    curl -f -L -o kafka-clients-3.6.0.jar \
+      https://repo1.maven.org/maven2/org/apache/kafka/kafka-clients/3.6.0/kafka-clients-3.6.0.jar && \
+    echo "Downloading Kafka Common..." && \
+    curl -f -L -o kafka-common-3.6.0.jar \
+      https://repo1.maven.org/maven2/org/apache/kafka/kafka-common/3.6.0/kafka-common-3.6.0.jar && \
+    echo "Downloading Kafka Protocol..." && \
+    curl -f -L -o kafka-protocol-3.6.0.jar \
+      https://repo1.maven.org/maven2/org/apache/kafka/kafka-protocol/3.6.0/kafka-protocol-3.6.0.jar && \
+    echo "All Kafka dependencies downloaded successfully" || \
+    echo "Warning: Some Kafka dependencies could not be downloaded"
 
 WORKDIR /flink

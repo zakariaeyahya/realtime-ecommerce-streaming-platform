@@ -1,0 +1,63 @@
+version: 2
+
+sources:
+  - name: kafka
+    description: Kafka topics from Flink jobs (Sprints 2-5)
+    database: default
+    schema: default
+    tables:
+      - name: events
+        description: Raw user events from Kafka
+        columns:
+          - name: event_id
+            description: Unique event ID
+          - name: user_id
+            description: User ID
+          - name: event_type
+            description: Type of event
+          - name: timestamp
+            description: Event timestamp
+
+      - name: fraud
+        description: Fraud scores from Flink
+        columns:
+          - name: event_id
+            description: Event ID
+          - name: fraud_score
+            description: Fraud detection score
+
+      - name: inventory
+        description: Inventory changes from Flink
+        columns:
+          - name: product_id
+            description: Product ID
+          - name: warehouse_id
+            description: Warehouse ID
+          - name: quantity_change
+            description: Quantity change
+          - name: current_stock
+            description: Current stock level
+          - name: timestamp
+            description: Change timestamp
+
+models:
+  - name: events_raw
+    description: Raw events from Kafka (Bronze layer)
+
+  - name: fraud_raw
+    description: Raw fraud scores (Bronze layer)
+
+  - name: inventory_raw
+    description: Raw inventory changes (Bronze layer)
+
+  - name: events_clean
+    description: Cleaned and deduplicated events (Silver layer)
+
+  - name: fraud_events
+    description: Enriched fraud events (Silver layer)
+
+  - name: fact_purchases
+    description: Purchase facts (Gold layer)
+
+  - name: mart_fraud_daily
+    description: Daily fraud metrics (Gold layer)

@@ -11,3 +11,5 @@ ecommerce_lakehouse:
       threads: 4
       connect_retries: 5
       connect_timeout: 10
+      session_args:
+        spark.hadoop.io.native.lib.available: "false"
