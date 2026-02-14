@@ -145,3 +145,16 @@ LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 # ============================================================================
 INVENTORY_DEFAULT_REORDER_POINT = 100
 INVENTORY_DEFAULT_LEAD_TIME_DAYS = 7
+
+# ============================================================================
+# API CONFIGURATION (Sprint 7)
+# ============================================================================
+API_HOST = "0.0.0.0"
+API_PORT = 8000
+API_WORKERS = 1
+
+# Redis key prefixes
+REDIS_KEY_FRAUD = "fraud"
+REDIS_KEY_RECO = "reco"
+REDIS_KEY_INVENTORY = "inventory"
+REDIS_CACHE_TTL_RECO = 3600  # 1h
