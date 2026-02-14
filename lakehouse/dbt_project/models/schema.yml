@@ -18,7 +18,7 @@ sources:
           - name: timestamp
             description: Event timestamp
 
-      - name: fraud
+      - name: fraud_scores
         description: Fraud scores from Flink
         columns:
           - name: event_id
@@ -61,3 +61,15 @@ models:
 
   - name: mart_fraud_daily
     description: Daily fraud metrics (Gold layer)
+
+  - name: inventory_state
+    description: Deduplicated inventory state with stock levels (Silver layer)
+
+  - name: dim_users
+    description: User dimension table with activity summary (Gold layer)
+
+  - name: dim_products
+    description: Product dimension table with event stats and stock info (Gold layer)
+
+  - name: mart_inventory_kpis
+    description: Daily inventory KPIs per product (Gold layer)

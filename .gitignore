@@ -114,3 +114,4 @@ secrets/
 credentials.json
 *.key
 *.pem
+lakehouse/dbt_project/target/
