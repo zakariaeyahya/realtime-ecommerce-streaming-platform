@@ -72,31 +72,7 @@ uvicorn serving.api.main:app --host 0.0.0.0 --port 8000
 
 ## Architecture
 
-```
-                    +---------------------------+
-                    |   Kafka (Event Streaming)  |
-                    |   5 topics, Avro schemas   |
-                    +-----+------+------+-------+
-                          |      |      |
-                    +-----v-+ +--v---+ +v--------+
-                    | Flink | | Flink| |  Flink   |
-                    | Fraud | | Reco | | Inventory|
-                    +-----+-+ +--+---+ +--+------+
-                          |      |        |
-                    +-----v------v--------v------+
-                    |     Redis (Cache)           |
-                    +----------+------------------+
-                               |
-                    +----------v------------------+
-                    |   FastAPI (REST API)         |
-                    |   /fraud  /reco  /inventory  |
-                    +----------+------------------+
-                               |
-                    +----------v------------------+
-                    | Prometheus + Grafana         |
-                    | (Monitoring & Alertes)       |
-                    +-----------------------------+
-```
+![Architecture Globale](docs/diagrams/architecture_globale.png)
 
 ### Stack Technique
 
@@ -201,6 +177,12 @@ PROJET-1/
 
 ---
 
+## Flux de Donnees
+
+![Flux de Donnees](docs/diagrams/flux_donnees.png)
+
+---
+
 ## Fonctionnalites
 
 ### 1. Detection de Fraude (Flink)
@@ -238,12 +220,16 @@ PROJET-1/
 
 ### 5. Lakehouse (Iceberg + dbt)
 
+![Lakehouse Architecture](docs/diagrams/lakehouse.png)
+
 - **Bronze** : Donnees brutes Kafka (events, fraud_scores, inventory)
 - **Silver** : Donnees nettoyees et deduplicees
 - **Gold** : Dimensions (users, products) + KPIs business
 - Stockage S3 via MinIO
 
 ### 6. Monitoring (Prometheus + Grafana)
+
+![Monitoring & Alerting](docs/diagrams/monitoring.png)
 
 - 4 targets scrapes : FastAPI, Flink, Redis, Prometheus
 - 7 regles d'alerte (APIDown, RedisDown, FlinkJobFailed, etc.)
