@@ -1,337 +1,301 @@
-# Architecture - Sprint 1: Ingestion Kafka
+# Architecture - E-Commerce Streaming Analytics Platform
 
-## Vue d'Ensemble
+## Vue d'ensemble
 
-Le Sprint 1 implémente une architecture d'ingestion de données en temps réel basée sur Apache Kafka pour une plateforme e-commerce.
+![Architecture Globale](diagrams/architecture_globale.png)
+
+La plateforme est composee de 7 couches :
+
+1. **Ingestion** : Kafka producers avec schemas Avro
+2. **Processing** : PyFlink jobs (fraude, recommandations, inventaire)
+3. **Storage** : Redis (cache) + MinIO (S3 object storage)
+4. **Serving** : FastAPI REST API + Kafka consumers
+5. **Lakehouse** : Apache Iceberg + dbt (Bronze/Silver/Gold)
+6. **Monitoring** : Prometheus + Grafana
+7. **Orchestration** : Apache Airflow
+
+---
+
+## Flux de Donnees
+
+![Flux de Donnees](diagrams/flux_donnees.png)
+
+### Pipeline principal
 
 ```
-┌─────────────────┐
-│  Data Sources   │
-│  (Producer)     │
-├─────────────────┤
-│ - Synthetic     │
-│ - Retail Rocket │
-│ - Web Events    │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Apache Kafka   │
-│  (Message Bus)  │
-├─────────────────┤
-│ Topics:         │
-│ • raw-events    │
-│ • inventory     │
-│ • fraud-scores  │
-│ • recommend.    │
-│ • metrics       │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   Consumers     │
-│  (Processing)   │
-├─────────────────┤
-│ - Validation    │
-│ - Storage       │
-│ - Analytics     │
-└─────────────────┘
+Evenements E-Commerce
+    |
+    v
+Kafka Producer (serialisation Avro)
+    |
+    v
+Topic: ecommerce-events (Kafka 7.5.0)
+    |
+    +---> Flink Fraud Detection (fenetre 5min, 90+ features, RandomForest)
+    |         |-> Topic: fraud-scores -> FraudConsumer -> Redis fraud:{user_id}
+    |
+    +---> Flink Recommendations (session 30min, collaborative filtering)
+    |         |-> Topic: recommendations -> RecoConsumer -> Redis reco:{user_id}
+    |
+    +---> Flink Inventory Forecast (sliding 24h, Prophet+ARIMA)
+              |-> Topic: inventory-changes -> InventoryConsumer -> Redis inventory:{product_id}
+
+Redis --> FastAPI --> Client (JSON)
 ```
 
-## Composants
+---
 
-### 1. Producer Kafka (`ingestion/producer.py`)
+## Couche Ingestion
 
-**Responsabilités:**
-- Génération d'événements e-commerce synthétiques
-- Sérialisation en JSON
-- Envoi vers topics Kafka avec retry logic
-- Support du speed multiplier (1x, 10x, 100x)
+### Kafka Producer (`ingestion/producer.py`)
 
-**Types d'Événements Générés:**
-- `view`: Consultation de produit (50%)
-- `addtocart`: Ajout au panier (20%)
-- `transaction`: Achat (10%)
-- `search`: Recherche (10%)
-- `filter`: Filtrage (7%)
-- `review`: Avis client (3%)
+- Generation d'evenements e-commerce (view, addtocart, transaction, search, filter, review)
+- Serialisation Avro via Schema Registry (port 8086)
+- Partitionnement par `user_id`
+- Config : acks=all, retries=3, compression snappy
 
-**Configuration:**
+### Topics Kafka (5)
+
+| Topic | Contenu | Producteur | Consommateur |
+|-------|---------|------------|-------------|
+| raw-events | Evenements bruts | Producer | Flink jobs |
+| fraud-scores | Scores de fraude | Flink Fraud | FraudConsumer |
+| recommendations | Recommandations | Flink Reco | RecoConsumer |
+| inventory-changes | Variations stock | Flink Inventory | InventoryConsumer |
+| business-metrics | KPIs business | Flink unified | - |
+
+### Schemas Avro (`ingestion/schema/`)
+
+Schemas definis pour chaque type d'evenement avec validation stricte.
+
+### Loaders (`ingestion/loaders/`)
+
+- `retail_rocket_loader.py` : Charge le dataset Retail Rocket (2.7M evenements)
+- `instacart_loader.py` : Loader Instacart
+- `olist_loader.py` : Loader Olist
+
+---
+
+## Couche Processing (PyFlink 1.18.1)
+
+### Fraud Detection (`processing/flink_jobs/fraud_detection.py`)
+
+| Parametre | Valeur |
+|-----------|--------|
+| Fenetre | Tumbling 5 minutes |
+| Features | 90+ (montant, frequence, device, geo, velocite) |
+| Modele | RandomForest (.pkl) |
+| Seuil | 0.85 (FRAUD_THRESHOLD) |
+| Precision | 94% |
+| Rappel | 89% |
+| Latence | < 500ms (p99) |
+
+### Recommendations (`processing/flink_jobs/recommendations.py`)
+
+| Parametre | Valeur |
+|-----------|--------|
+| Fenetre | Session 30 minutes |
+| Algorithme | Collaborative filtering (item-based) |
+| Features | 30+ (historique, categories, clicks) |
+| Output | Top-K produits similaires |
+
+### Inventory Forecasting (`processing/flink_jobs/inventory_forecasting.py`)
+
+| Parametre | Valeur |
+|-----------|--------|
+| Fenetre | Sliding 24 heures |
+| Features | 50+ (tendance, saisonnalite, stock) |
+| Modele | Prophet 60% + ARIMA 40% (ensemble) |
+| Seuil alerte | < 100 unites |
+| Precision | 87.5% |
+| Latence | < 2s |
+
+### Utilitaires (`processing/flink_jobs/utils/`)
+
+| Module | Role |
+|--------|------|
+| cache_manager.py | Cache Redis avec fallback memoire + stats (hits/misses) |
+| feature_extractor.py | Extraction de 90+ features par transaction |
+| feature_engineering.py | Transformations de features |
+| forecasting_engine.py | Moteur de prevision Prophet + ARIMA |
+| recommendation_engine.py | Moteur de recommandation collaborative |
+| model_loader.py | Chargement des modeles ML (.pkl, .joblib) |
+| time_series_features.py | Features time-series (tendance, saisonnalite) |
+
+### Modeles ML (`processing/models/`)
+
+| Fichier | Format | Utilise par |
+|---------|--------|-------------|
+| fraud_model.pkl | pickle | Fraud Detection |
+| recommendation_model.pkl | pickle | Recommendations |
+| inventory_forecast_models.joblib | joblib | Inventory Forecasting |
+
+---
+
+## Couche Serving
+
+### FastAPI (`serving/api/main.py`)
+
+5 endpoints REST qui lisent les resultats depuis Redis :
+
+| Endpoint | Description | Cle Redis | TTL |
+|----------|-------------|-----------|-----|
+| GET /health | Etat services | - | - |
+| GET /fraud/{user_id} | Score de fraude | fraud:{user_id} | 24h |
+| GET /recommendations/{user_id} | Recommandations | reco:{user_id} | 1h |
+| GET /inventory/{product_id} | Prevision stock | inventory:{product_id} | 7j |
+| GET /metrics | Metriques Prometheus | - | - |
+
+### Kafka Consumers (`serving/consumers/kafka_consumers.py`)
+
+3 consumers en threads daemon qui alimentent Redis :
+
+- **FraudConsumer** : topic fraud-scores -> Redis
+- **RecoConsumer** : topic recommendations -> Redis
+- **InventoryConsumer** : topic inventory-changes -> Redis
+
+---
+
+## Couche Storage
+
+### Redis 7
+
+- Cache des resultats de processing
+- Port : 6381 (Docker) / 6379 (local)
+- Persistance : AOF (append-only file)
+- TTL par type de donnee (1h a 7j)
+
+### MinIO (S3-compatible)
+
+- Stockage des tables Iceberg
+- Port API : 9010
+- Console : 9001
+- Identifiants : minioadmin / minioadmin
+
+---
+
+## Couche Lakehouse
+
+![Lakehouse Architecture](diagrams/lakehouse.png)
+
+### Architecture Bronze/Silver/Gold (dbt)
+
+| Couche | Modeles | Description |
+|--------|---------|-------------|
+| Bronze | events_raw, fraud_raw, inventory_raw | Donnees brutes depuis Kafka |
+| Silver | fraud_scored, user_sessions, inventory_state | Donnees nettoyees, deduplicees |
+| Gold | dim_users, dim_products, mart_inventory_kpis | Dimensions et KPIs business |
+
+### Technologies
+
+- **Apache Iceberg** : Format de table pour le lakehouse
+- **dbt** : Transformations SQL (Bronze > Silver > Gold)
+- **MinIO** : Stockage S3-compatible
+- **Spark SQL** : Moteur de requetes
+
+---
+
+## Couche Monitoring
+
+![Monitoring](diagrams/monitoring.png)
+
+### Prometheus (port 9090)
+
+4 targets scrapes toutes les 15 secondes :
+
+| Target | URL | Metriques |
+|--------|-----|-----------|
+| FastAPI | host.docker.internal:8000/metrics | Requetes, latence |
+| Flink | jobmanager:8081 | Jobs, tasks, checkpoints |
+| Redis Exporter | redis-exporter:9121 | Memoire, keys, ops/s |
+| Prometheus | localhost:9090 | Self-monitoring |
+
+### Alertes (7 regles)
+
+| Alerte | Severite | Condition |
+|--------|----------|-----------|
+| APIDown | critical | API inaccessible > 1min |
+| RedisDown | critical | Redis inaccessible > 30s |
+| FlinkJobFailed | critical | Job Flink down |
+| HighAPILatency | warning | Latence p99 > 2s |
+| HighFraudRate | warning | Taux fraude > 5% |
+| KafkaConsumerLag | warning | Lag > 10000 |
+| LowCacheHitRate | warning | Hit rate < 50% |
+
+### Grafana (port 3000)
+
+Dashboard unifie avec 20 panels en 4 sections :
+1. **Services Status** : UP/DOWN de API, Redis, Flink
+2. **API FastAPI** : Requetes/s, latence, erreurs
+3. **Redis Cache** : Memoire, nombre de cles, hit rate
+4. **Business KPIs** : Fraudes detectees, recommandations, alertes stock
+
+---
+
+## Couche Orchestration
+
+### Airflow (port 8082)
+
+- **Executor** : SequentialExecutor (SQLite)
+- **DAG data_quality** : Verification quotidienne a 6h
+  - Check API health
+  - Check Redis data
+  - Check Kafka topics
+  - Check dbt freshness
+  - Generation du rapport
+
+---
+
+## Infrastructure Docker
+
+13 services dans `docker-compose.yml` :
+
+| Service | Image | Port | Role |
+|---------|-------|------|------|
+| Zookeeper | cp-zookeeper:7.5.0 | 2181 | Coordination Kafka |
+| Kafka | cp-kafka:7.5.0 | 9092 | Message streaming |
+| Schema Registry | cp-schema-registry:7.5.0 | 8086 | Schemas Avro |
+| Kafka UI | kafka-ui:latest | 8080 | Interface web Kafka |
+| Redis | redis:7-alpine | 6381 | Cache |
+| JobManager | PyFlink custom | 8081 | Flink master |
+| TaskManager x2 | PyFlink custom | - | Flink workers (4 slots chacun) |
+| MinIO | minio:latest | 9010/9001 | Object storage S3 |
+| Prometheus | prometheus:v2.48.0 | 9090 | Collecte metriques |
+| Redis Exporter | redis_exporter:latest | 9121 | Export metriques Redis |
+| Grafana | grafana:10.2.0 | 3000 | Dashboards |
+| Airflow | airflow:2.7.3-python3.11 | 8082 | Orchestration DAGs |
+
+### Reseau
+
+Tous les services sont sur le reseau Docker `data-platform` (bridge).
+
+### Volumes persistants
+
+| Volume | Service | Usage |
+|--------|---------|-------|
+| redis_data | Redis | Donnees cache |
+| flink_checkpoints | Flink | Checkpoints d'etat |
+| flink_savepoints | Flink | Savepoints |
+| minio_data | MinIO | Tables Iceberg |
+| prometheus_data | Prometheus | Historique metriques |
+| grafana_data | Grafana | Dashboards et config |
+| airflow_data | Airflow | DB et logs |
+
+---
+
+## Configuration Centralisee
+
+Fichier : `config/constants.py`
+
+Toutes les constantes sont surchargeable par variable d'environnement :
+
 ```python
-PRODUCER_CONFIG = {
-    'acks': 'all',           # Durabilité maximale
-    'retries': 3,            # Résilience
-    'compression': 'snappy', # Performance
-}
+threshold = float(os.getenv("FRAUD_THRESHOLD", FRAUD_THRESHOLD))
 ```
 
-### 2. Consumer Kafka (`ingestion/basic_consumer.py`)
-
-**Responsabilités:**
-- Consommation des événements depuis Kafka
-- Validation des schémas (champs obligatoires)
-- Logging structuré
-- Gestion des offsets
-
-**Validation:**
-- Vérification des champs obligatoires par type d'événement
-- Rejet des événements malformés
-- Compteurs de métriques (valides/invalides)
-
-### 3. Infrastructure Kafka (Docker Compose)
-
-**Services:**
-
-#### Zookeeper
-- Port: 2181
-- Rôle: Coordination du cluster Kafka
-
-#### Kafka Broker
-- Port: 9092
-- Partitions par topic: 1-3
-- Replication factor: 1 (dev), 3+ (prod)
-
-#### Schema Registry
-- Port: 8081
-- Rôle: Gestion des schémas Avro (Sprint 2+)
-
-#### Kafka UI
-- Port: 8080
-- Rôle: Monitoring et debugging
-
-## Flux de Données
-
-### Flux Principal (Event Streaming)
+Fichier `.env` pour Docker Compose :
 
 ```
-1. EVENT GENERATION
-   │
-   ├─→ producer.generate_event()
-   │   ├─→ Sélection du type (weighted random)
-   │   ├─→ Génération des champs (Faker)
-   │   └─→ Ajout du timestamp
-   │
-2. SERIALIZATION
-   │
-   ├─→ JSON encoding
-   ├─→ UTF-8 encoding
-   └─→ user_id as key (partitioning)
-   │
-3. KAFKA PUBLISH
-   │
-   ├─→ Topic routing (raw-events)
-   ├─→ Partition assignment (hash(user_id))
-   └─→ Delivery callback
-   │
-4. KAFKA STORAGE
-   │
-   ├─→ Append to partition log
-   ├─→ Replication (if configured)
-   └─→ Retention policy (7-30 days)
-   │
-5. CONSUMPTION
-   │
-   ├─→ consumer.poll()
-   ├─→ Deserialization (JSON)
-   ├─→ Validation
-   └─→ Processing/Logging
+COMPOSE_PROJECT_NAME=streaming
+PROJECT_PATH=D:/grand projet/PROJET 1
 ```
-
-### Flux de Validation
-
-```
-┌──────────────┐
-│ Raw Message  │
-└──────┬───────┘
-       │
-       ▼
-┌──────────────┐
-│ Decode UTF-8 │
-└──────┬───────┘
-       │
-       ▼
-┌──────────────┐
-│ Parse JSON   │
-└──────┬───────┘
-       │
-       ▼
-┌──────────────────┐
-│ Validate Schema  │
-│ • event_type     │
-│ • required fields│
-└──────┬───────────┘
-       │
-       ├─→ VALID ────→ Process
-       │
-       └─→ INVALID ──→ Log + Reject
-```
-
-## Configuration Centralisée
-
-### `config/constants.py`
-
-Toutes les configurations sont externalisées:
-
-```python
-# Kafka
-KAFKA_BROKERS
-KAFKA_TOPICS
-PRODUCER_CONFIG
-CONSUMER_CONFIG
-
-# Data Generation
-EVENT_TYPES
-EVENT_TYPE_WEIGHTS
-PRODUCT_CATEGORIES
-PRICE_RANGES
-
-# Logging
-LOG_LEVEL
-LOG_FORMAT
-```
-
-### `.env` (Variables d'environnement)
-
-```bash
-KAFKA_BROKERS=localhost:9092
-PRODUCER_SPEED=1.0
-CONSUMER_GROUP_ID=ecommerce-consumer-group
-LOG_LEVEL=INFO
-```
-
-## Schémas de Données
-
-### Événement View
-
-```json
-{
-  "event_id": "uuid",
-  "event_type": "view",
-  "timestamp": 1704067200000,
-  "user_id": "12345",
-  "item_id": "9876",
-  "category": "Electronics",
-  "session_id": "session-abc",
-  "device_type": "mobile"
-}
-```
-
-### Événement Transaction
-
-```json
-{
-  "event_id": "uuid",
-  "event_type": "transaction",
-  "timestamp": 1704067200000,
-  "user_id": "12345",
-  "item_id": "9876",
-  "category": "Electronics",
-  "price": 599.99,
-  "quantity": 2
-}
-```
-
-## Patterns de Design
-
-### 1. Producer Pattern
-- **Factory Pattern**: Génération d'événements par type
-- **Callback Pattern**: Delivery confirmation asynchrone
-- **Retry Pattern**: Tentatives automatiques en cas d'échec
-
-### 2. Consumer Pattern
-- **Poll Loop**: Boucle de consommation continue
-- **Validation Pattern**: Vérification avant traitement
-- **Offset Management**: Commit automatique ou manuel
-
-### 3. Configuration Pattern
-- **Environment Variables**: Configuration externalisée
-- **Constants Module**: Point unique de vérité
-- **Type Hints**: Documentation et validation statique
-
-## Scalabilité
-
-### Horizontal Scaling
-
-**Producer:**
-- Plusieurs instances parallèles
-- Partitioning par user_id
-- Load balancing automatique
-
-**Consumer:**
-- Consumer Group avec plusieurs instances
-- Chaque partition assignée à un consumer
-- Rebalancing automatique
-
-**Exemple:**
-```
-Topic raw-events (3 partitions)
-├─→ Partition 0 → Consumer A
-├─→ Partition 1 → Consumer B
-└─→ Partition 2 → Consumer C
-```
-
-### Vertical Scaling
-
-**Optimisations:**
-- Batching des messages (linger.ms)
-- Compression (snappy)
-- Buffering (batch.size)
-
-## Résilience
-
-### Producer
-- Retry automatique (3 tentatives)
-- Acks='all' (durabilité maximale)
-- Idempotence (évite duplications)
-
-### Consumer
-- Auto-commit des offsets
-- Session timeout avec rebalancing
-- Error handling avec logging
-
-### Infrastructure
-- Healthchecks Docker
-- Replication Kafka (production)
-- Retention policy (backup temporel)
-
-## Monitoring
-
-### Métriques Clés
-
-**Producer:**
-- events_sent
-- events_failed
-- throughput (events/sec)
-
-**Consumer:**
-- messages_consumed
-- messages_invalid
-- consumer lag
-
-**Kafka:**
-- Topic size
-- Partition count
-- Consumer group lag
-
-## Évolutions Futures
-
-### Sprint 2: Avro Serialization
-- Schémas Avro stricts
-- Schema Registry integration
-- Backward compatibility
-
-### Sprint 3: Stream Processing
-- Kafka Streams
-- Aggregations en temps réel
-- Windowing
-
-### Sprint 4: Fraud Detection
-- ML scoring en temps réel
-- Fraud topic
-- Alerting
-
-## Références
-
-- [Kafka Architecture](https://kafka.apache.org/documentation/#design)
-- [Confluent Best Practices](https://docs.confluent.io/platform/current/kafka/deployment.html)
-- [Event-Driven Architecture](https://martinfowler.com/articles/201701-event-driven.html)
