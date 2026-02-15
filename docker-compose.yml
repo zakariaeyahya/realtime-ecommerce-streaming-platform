@@ -237,6 +237,24 @@ services:
       redis:
         condition: service_healthy
 
+  # Grafana (Dashboards & Visualization)
+  grafana:
+    image: grafana/grafana:10.2.0
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/business_kpis.json
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    networks:
+      - data-platform
+    depends_on:
+      - prometheus
+
 networks:
   data-platform:
     driver: bridge
@@ -247,3 +265,4 @@ volumes:
   flink_savepoints:
   minio_data:
   prometheus_data:
+  grafana_data:
