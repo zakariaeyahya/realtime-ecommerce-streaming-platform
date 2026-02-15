@@ -352,16 +352,4 @@ uvicorn serving.api.main:app --host 0.0.0.0 --port 8000
 - **Fonctions** : < 30 lignes, type hints obligatoires
 
 ---
-
-## Sprints
-
-| Sprint | Contenu | Status |
-|--------|---------|--------|
-| 1 | Kafka producers/consumers + schemas Avro | Complete |
-| 2 | Integration donnees (Retail Rocket 2.7M events) | Complete |
-| 3 | Flink Fraud Detection | Complete |
-| 4 | Recommandations personnalisees | Complete |
-| 5 | Prevision d'inventaire | Complete |
-| 6 | Lakehouse (Iceberg + dbt) | Partiel |
-| 7 | API FastAPI (Serving Layer) | Complete |
-| 8 | Docker + Monitoring + Orchestration | Complete |
+ 
