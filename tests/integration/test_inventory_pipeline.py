@@ -62,13 +62,17 @@ class TestInventoryPipeline:
         """Test cache hit rate is optimal."""
         cache = pipeline_components['cache']
 
-        # Simulate multiple accesses
-        for i in range(10):
-            cache.get_forecast('sku-001', 'wh-01')
+        # Use a unique key to ensure first access is a miss
+        cache.get_forecast('sku-unique-test-999', 'wh-99')
+        # Then set and get to generate hits
+        cache.set_forecast('sku-unique-test-999', 'wh-99', {"forecast": [100]})
+        for i in range(9):
+            cache.get_forecast('sku-unique-test-999', 'wh-99')
 
         stats = cache.get_cache_stats()
-        # First access will be miss, then hits
+        # First access was a miss, then 9 hits
         assert stats['misses'] >= 1
+        assert stats['hits'] >= 9
 
     def test_latency_requirements(self, pipeline_components):
         """Test latency meets requirements."""

@@ -19,7 +19,7 @@ class TestCacheManager:
 
     def test_cache_get_miss(self, cache):
         """Test cache get on miss."""
-        result = cache.get_forecast("sku-001", "wh-01")
+        result = cache.get_forecast("nonexistent-sku-xyz-999", "wh-nonexistent")
         assert result is None
         assert cache.misses > 0
 

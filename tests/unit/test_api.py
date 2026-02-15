@@ -45,7 +45,7 @@ class TestHealthEndpoint:
     def test_health_redis_up(self, client, mock_redis):
         """Health returns healthy when Redis is connected."""
         mock_redis.ping.return_value = True
-        with patch("serving.api.main.Producer") as mock_producer_cls:
+        with patch("confluent_kafka.Producer") as mock_producer_cls:
             mock_prod = MagicMock()
             mock_producer_cls.return_value = mock_prod
             response = client.get("/health")
