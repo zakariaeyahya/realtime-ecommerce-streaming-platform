@@ -202,6 +202,41 @@ services:
       timeout: 20s
       retries: 3
 
+  # Prometheus (Metrics Collection)
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - data-platform
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # Redis Exporter (Redis metrics for Prometheus)
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    environment:
+      REDIS_ADDR: redis:6379
+    ports:
+      - "9121:9121"
+    networks:
+      - data-platform
+    depends_on:
+      redis:
+        condition: service_healthy
+
 networks:
   data-platform:
     driver: bridge
@@ -211,3 +246,4 @@ volumes:
   flink_checkpoints:
   flink_savepoints:
   minio_data:
+  prometheus_data:

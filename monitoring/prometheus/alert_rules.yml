@@ -1,0 +1,80 @@
+groups:
+  - name: api_alerts
+    rules:
+      # API inaccessible pendant plus d'1 minute
+      - alert: APIDown
+        expr: up{job="fastapi"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "FastAPI is down"
+          description: "FastAPI endpoint has been unreachable for more than 1 minute."
+
+      # Latence API superieure a 2 secondes (p99)
+      - alert: HighAPILatency
+        expr: histogram_quantile(0.99, rate(api_request_latency_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API latency detected"
+          description: "API p99 latency is above 2 seconds for the last 5 minutes."
+
+  - name: infrastructure_alerts
+    rules:
+      # Redis inaccessible pendant plus de 30 secondes
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+          description: "Redis exporter has been unreachable for more than 30 seconds."
+
+      # Flink JobManager inaccessible
+      - alert: FlinkJobFailed
+        expr: up{job="flink"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Flink JobManager is down"
+          description: "Flink JobManager has been unreachable for more than 1 minute."
+
+      # Redis memory usage superieur a 80%
+      - alert: RedisHighMemory
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Redis memory usage is above 80% for the last 5 minutes."
+
+  - name: business_alerts
+    rules:
+      # Taux de fraude superieur a 5%
+      - alert: HighFraudRate
+        expr: |
+          sum(rate(api_requests_total{endpoint="fraud",status="200"}[10m]))
+          / sum(rate(api_requests_total{status="200"}[10m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High fraud detection rate"
+          description: "Fraud detection rate is above 5% for the last 10 minutes."
+
+      # Trop de 404 sur les endpoints (cache miss eleve)
+      - alert: LowCacheHitRate
+        expr: |
+          sum(rate(api_requests_total{status="404"}[5m]))
+          / sum(rate(api_requests_total[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low cache hit rate"
+          description: "More than 50% of API requests return 404 (cache miss) for the last 5 minutes."
