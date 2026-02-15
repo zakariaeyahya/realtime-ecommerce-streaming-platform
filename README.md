@@ -1,519 +1,381 @@
-# 📊 Real-Time E-Commerce Streaming Analytics Platform
+# Real-Time E-Commerce Streaming Analytics Platform
 
-A production-ready streaming analytics platform for modern e-commerce, processing 200k+ events per second with real-time fraud detection, personalized recommendations, and inventory forecasting.
+Plateforme d'analytics streaming temps reel pour e-commerce, avec detection de fraude, recommandations personnalisees et prevision d'inventaire.
 
-**Quick Stats:**
-- ⚡ **200k+** events/second throughput
-- 🔴 **<500ms** fraud detection latency (p99)
-- 🎁 **+18%** conversion rate improvement
-- 📦 **-30%** inventory stockouts reduced
-- 💰 **€2.5M/year** fraud prevented
+## Resultats
+
+- **177 tests** passent (0 echecs)
+- **78% coverage** (objectif > 70%)
+- **13 services Docker** orchestres
+- **2.7M evenements** Retail Rocket integres
 
 ---
 
-## 🚀 Quick Start (5 minutes)
+## Quick Start
 
-### Prerequisites
+### Prerequis
+
 - Docker & Docker Compose
-- Python 3.10+
+- Python 3.11+
 - Git
 
 ### Installation
 
 ```bash
-# Clone and setup
+# Cloner le projet
 git clone <repo-url>
-cd project1-ecommerce-streaming
-cp .env.example .env
+cd PROJET-1
 
-# Start all services
+# Creer et activer le virtualenv
+python -m venv venv
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # Linux/Mac
+
+# Installer les dependances
+pip install -r requirements.txt
+
+# Configurer le chemin projet dans config/.env
+# PROJECT_PATH=D:/grand projet/PROJET 1
+
+# Demarrer les services Docker
 docker-compose up -d
 
-# Wait for services (30s) and verify
-docker-compose ps  # All should be healthy
-
-# Validate setup
-docker-compose exec kafka kafka-topics --list --bootstrap-server localhost:9092
-curl http://localhost:8000/health
+# Verifier que tout est healthy
+docker-compose ps
 ```
 
-### Access Dashboards
-
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| **API (Swagger)** | http://localhost:8000/docs | - |
-| **Grafana Dashboards** | http://localhost:3000 | admin/admin |
-| **Prometheus Metrics** | http://localhost:9090 | - |
-| **Kafka UI** | http://localhost:8080 | - |
-
----
-
-## 🏗️ Architecture
-
-### System Overview
-
-```
-┌──────────────────────┐
-│ Apps/Events (100k/s) │
-└──────────┬───────────┘
-           │
-    ┌──────▼─────────────────────────┐
-    │ Apache Kafka (Event Streaming)  │
-    │ 50+ topics, 3x replication      │
-    └──────┬──────┬────────┬──────────┘
-           │      │        │
-      ┌────▼──┐ ┌─▼────┐ ┌▼────────┐
-      │ Flink │ │Flink │ │  Flink  │
-      │Fraud  │ │Recom-│ │Inventory│
-      │       │ │mends │ │Forecast │
-      └────┬──┘ └─┬────┘ └┬────────┘
-           │      │       │
-      ┌────▼──────▼───────▼────┐
-      │ Redis + RocksDB + S3   │
-      │ (Cache & State Storage)│
-      └────┬──────────────────┘
-           │
-      ┌────▼──────────────────┐
-      │ FastAPI / Iceberg     │
-      │ (Query & Analytics)   │
-      └────┬──────────────────┘
-           │
-      ┌────▼──────────────────┐
-      │ Prometheus + Grafana  │
-      │ (Monitoring)          │
-      └───────────────────────┘
-```
-
-### Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| **Streaming** | Apache Kafka 7.5 + Flink 1.18 |
-| **Storage** | Apache Iceberg + MinIO (S3-compatible) |
-| **Cache** | Redis Cluster |
-| **Analytics** | dbt + Trino/Spark |
-| **API** | FastAPI + Uvicorn |
-| **Orchestration** | Apache Airflow |
-| **Monitoring** | Prometheus + Grafana |
-| **Infrastructure** | Docker Compose (Docker, K8s ready) |
-
----
-
-## 🎯 Core Capabilities
-
-### 1. Real-Time Fraud Detection
-- **Input:** Purchase events from Kafka
-- **Processing:** 5-minute tumbling windows + 90+ features
-- **Output:** Fraud scores to Redis
-- **Latency:** < 500ms (p99)
-- **Accuracy:** 94% precision, 89% recall
-
-```python
-# Example usage
-from processing.flink_jobs.fraud_detection import FraudDetectionJob
-job = FraudDetectionJob()
-job.run()  # Processes events from Kafka
-```
-
-### 2. Personalized Recommendations
-- **Input:** User interaction events
-- **Algorithm:** Collaborative filtering (item-based)
-- **Output:** Top-K recommendations cached in Redis
-- **Latency:** < 1 second
-- **Session Windows:** 30 minutes (user session based)
-
-```python
-from processing.flink_jobs.recommendations import RecommendationsJob
-job = RecommendationsJob(config={'top_k': 10})
-job.run()
-```
-
-### 3. Inventory Forecasting & Optimization
-- **Input:** Stock level changes from Kafka
-- **Features:** 50+ time-series features (historical aggregations, trends, seasonality)
-- **Models:** Hybrid Prophet (60%) + ARIMA (40%) ensemble forecasting
-- **Processing:** Sliding 24-hour windows with Broadcast State for 500k+ products
-- **Output:** Stockout alerts + runout date predictions to Redis (7-day cache)
-- **Accuracy:** 87.5%+ with <2s latency
-- **Alert Threshold:** Triggers when inventory < 100 units or predicted runout < 7 days
-
-```python
-from processing.flink_jobs.inventory_forecasting import InventoryForecastingJob
-job = InventoryForecastingJob()
-job.run()  # Processes events and caches forecasts
-```
-
-**Impact:**
-- 30% reduction in inventory stockouts
-- Optimized reorder timing and cash flow
-- Accurate demand prediction for seasonal peaks
-
-### 4. Analytics & Dashboards
-- **Layer:** Iceberg lakehouse with dbt transformations
-- **Queries:** Real-time SQL on historical + streaming data
-- **Dashboards:** Business metrics, KPIs, operational alerts via Grafana
-
----
-
-## 📁 Project Structure
-
-```
-project1-ecommerce-streaming/
-│
-├── ingestion/                  # Data collection layer
-│   ├── producer.py             # Kafka event producer
-│   ├── basic_consumer.py       # Test consumer
-│   ├── schema/                 # Avro schemas
-│   └── requirements.txt
-│
-├── processing/                 # Stream processing layer (Flink)
-│   ├── flink_jobs/
-│   │   ├── fraud_detection.py  # Fraud detection job
-│   │   ├── recommendations.py  # Recommendations job
-│   │   ├── inventory_forecasting.py
-│   │   ├── utils/              # Shared utilities
-│   │   │   ├── feature_engineering.py
-│   │   │   ├── recommendation_engine.py
-│   │   │   ├── cache_manager.py
-│   │   │   └── feature_extractor.py
-│   │   └── models/             # ML models (pkl files)
-│   └── requirements.txt
-│
-├── serving/                    # API & consumer layer
-│   ├── api/
-│   │   ├── main.py            # FastAPI application
-│   │   ├── routers/           # Endpoint groups
-│   │   └── requirements.txt
-│   └── consumers/             # Background workers
-│
-├── lakehouse/                 # Analytical layer (dbt + Iceberg)
-│   ├── iceberg_setup/         # Iceberg catalog initialization
-│   ├── dbt_project/
-│   │   ├── models/            # Bronze/Silver/Gold layers
-│   │   └── tests/
-│   └── requirements.txt
-│
-├── orchestration/             # Workflow orchestration (Airflow)
-│   ├── dags/
-│   └── requirements.txt
-│
-├── monitoring/                # Monitoring & alerting
-│   ├── prometheus.yml
-│   ├── grafana/
-│   │   └── dashboards/
-│   └── alerts/
-│
-├── tests/                     # Test suites
-│   ├── unit/                  # Unit tests
-│   ├── integration/           # Integration tests
-│   └── performance/           # Performance tests
-│
-├── scripts/                   # Utility scripts
-│   ├── train_recommendation_model.py
-│   ├── evaluate_recommendations.py
-│   ├── load_real_data.py
-│   └── validate_data_quality.py
-│
-├── config/                    # Configuration
-│   ├── constants.py           # All constants
-│   └── kafka/topics.yaml      # Topic definitions
-│
-├── docs/                      # Documentation
-│   ├── ARCHITECTURE.md
-│   ├── GETTING_STARTED.md
-│   ├── API_DOCUMENTATION.md
-│   └── SPRINT4_COMPLETION.md  # Implementation details
-│
-├── docker-compose.yml         # Full stack orchestration
-├── .env.example               # Environment template
-└── README.md
-```
-
----
-
-## 🔄 Data Pipeline Examples
-
-### Use Case 1: Fraud Prevention
-
-```
-1. User makes purchase (€500 from Russia)
-   ↓
-2. Event arrives in Kafka (events topic)
-   ↓
-3. Flink job processes in 5-min window
-   ├─ Extracts 90+ features
-   ├─ Computes fraud score (ML model)
-   └─ Score: 0.92 (high risk)
-   ↓
-4. Score cached in Redis
-   ↓
-5. API returns fraud alert
-   ↓
-6. Transaction blocked/flagged for review
-   ↓
-Impact: €2.5M/year fraud prevented
-```
-
-### Use Case 2: Recommendations
-
-```
-1. User views/clicks product
-   ↓
-2. Event arrives in Kafka
-   ↓
-3. Flink job (30-min session windows)
-   ├─ Extracts 30+ user/item features
-   ├─ Runs collaborative filtering
-   └─ Returns top-10 similar products
-   ↓
-4. Cached in Redis (1-hour TTL)
-   ↓
-5. API serves recommendations on product page
-   ↓
-Impact: +18% conversion rate
-```
-
-### Use Case 3: Inventory Optimization
-
-```
-1. Stock level changes (warehouse)
-   ↓
-2. Event arrives in Kafka
-   ↓
-3. Flink job (sliding windows)
-   ├─ Forecasts runout using Prophet
-   ├─ Compares with reorder points
-   └─ Alerts if < 100 units
-   ↓
-4. Alert sent to supply chain team
-   ↓
-5. Automatic reorder triggered
-   ↓
-Impact: -30% stockouts, better cash flow
-```
-
----
-
-## ✅ Testing & Validation
-
-### Run All Tests
+### Lancer le pipeline Flink
 
 ```bash
-# Install test dependencies
-pip install -r tests/requirements.txt
+docker exec streaming-jobmanager-1 sh -c "export PYTHONPATH=/flink && flink run -py /flink/jobs/flink_jobs/unified_streaming_job_simple.py"
+```
 
-# Run all tests
+### Lancer l'API FastAPI
+
+```bash
+uvicorn serving.api.main:app --host 0.0.0.0 --port 8000
+```
+
+### Interfaces Web
+
+| Service | URL | Identifiants |
+|---------|-----|--------------|
+| API FastAPI (Swagger) | http://localhost:8000/docs | - |
+| Grafana | http://localhost:3000 | admin / admin |
+| Prometheus | http://localhost:9090 | - |
+| Kafka UI | http://localhost:8080 | - |
+| Airflow | http://localhost:8082 | admin / admin |
+| MinIO Console | http://localhost:9001 | minioadmin / minioadmin |
+| Flink Dashboard | http://localhost:8081 | - |
+
+---
+
+## Architecture
+
+```
+                    +---------------------------+
+                    |   Kafka (Event Streaming)  |
+                    |   5 topics, Avro schemas   |
+                    +-----+------+------+-------+
+                          |      |      |
+                    +-----v-+ +--v---+ +v--------+
+                    | Flink | | Flink| |  Flink   |
+                    | Fraud | | Reco | | Inventory|
+                    +-----+-+ +--+---+ +--+------+
+                          |      |        |
+                    +-----v------v--------v------+
+                    |     Redis (Cache)           |
+                    +----------+------------------+
+                               |
+                    +----------v------------------+
+                    |   FastAPI (REST API)         |
+                    |   /fraud  /reco  /inventory  |
+                    +----------+------------------+
+                               |
+                    +----------v------------------+
+                    | Prometheus + Grafana         |
+                    | (Monitoring & Alertes)       |
+                    +-----------------------------+
+```
+
+### Stack Technique
+
+| Couche | Technologie |
+|--------|------------|
+| Streaming | Apache Kafka 7.5.0 (Confluent) |
+| Processing | PyFlink 1.18.1 |
+| ML | scikit-learn (RandomForest), joblib |
+| Cache | Redis 7 |
+| API | FastAPI + Uvicorn |
+| Lakehouse | Apache Iceberg + dbt + MinIO |
+| Orchestration | Apache Airflow 2.7.3 |
+| Monitoring | Prometheus + Grafana |
+| Containers | Docker Compose (13 services) |
+
+---
+
+## Structure du Projet
+
+```
+PROJET-1/
+|
+|-- config/                         # Configuration centralisee
+|   |-- constants.py                # Constantes (seuils, ports, TTL)
+|   |-- .env                        # Variables d'environnement
+|   |-- kafka/topics.yaml           # 5 topics Kafka
+|   +-- flink/flink-conf.yaml       # Config Flink
+|
+|-- ingestion/                      # Couche ingestion
+|   |-- producer.py                 # Kafka producer (Avro)
+|   |-- basic_consumer.py           # Consumer de test
+|   |-- schemas.py                  # Schemas Python
+|   |-- schema/                     # Schemas Avro (.avsc)
+|   +-- loaders/                    # Chargeurs de datasets
+|       |-- retail_rocket_loader.py # Retail Rocket (2.7M events)
+|       |-- instacart_loader.py
+|       +-- olist_loader.py
+|
+|-- processing/                     # Couche traitement (Flink)
+|   |-- Dockerfile                  # Image Flink custom
+|   |-- flink_jobs/
+|   |   |-- fraud_detection.py      # Detection de fraude
+|   |   |-- recommendations.py      # Recommandations
+|   |   |-- inventory_forecasting.py# Prevision inventaire
+|   |   |-- unified_streaming_job_simple.py
+|   |   +-- utils/
+|   |       |-- cache_manager.py    # Redis + fallback memoire
+|   |       |-- feature_extractor.py# 90+ features
+|   |       |-- feature_engineering.py
+|   |       |-- forecasting_engine.py
+|   |       |-- recommendation_engine.py
+|   |       |-- model_loader.py
+|   |       +-- time_series_features.py
+|   +-- models/                     # Modeles ML (.pkl, .joblib)
+|
+|-- serving/                        # Couche API
+|   |-- api/
+|   |   |-- main.py                 # FastAPI (5 endpoints)
+|   |   +-- models.py               # Modeles Pydantic
+|   +-- consumers/
+|       +-- kafka_consumers.py      # 3 consumers Kafka -> Redis
+|
+|-- lakehouse/                      # Couche analytique
+|   |-- iceberg_setup/              # Init catalogue Iceberg
+|   |-- spark_jobs/                 # Jobs Spark
+|   +-- dbt_project/
+|       |-- models/
+|       |   |-- bronze/             # Donnees brutes
+|       |   |-- silver/             # Donnees nettoyees
+|       |   +-- gold/               # Dimensions & KPIs
+|       +-- tests/                  # Tests de qualite dbt
+|
+|-- orchestration/                  # Orchestration
+|   +-- dags/
+|       +-- data_quality.py         # DAG qualite quotidien
+|
+|-- monitoring/                     # Monitoring
+|   |-- prometheus/
+|   |   |-- prometheus.yml          # Scrape config (4 targets)
+|   |   +-- alert_rules.yml         # 7 regles d'alerte
+|   +-- grafana/
+|       |-- provisioning/           # Auto-config datasources
+|       +-- dashboards/
+|           +-- overview.json       # Dashboard unifie (20 panels)
+|
+|-- tests/                          # Tests
+|   |-- conftest.py                 # Fixtures partagees
+|   |-- unit/                       # 22 fichiers de tests
+|   +-- integration/                # 7 fichiers de tests
+|
+|-- scripts/                        # Utilitaires
+|   |-- load_real_data.py           # Chargement Retail Rocket
+|   |-- train_fraud_model.py
+|   |-- train_recommendation_model.py
+|   |-- train_inventory_model.py
+|   +-- evaluate_*.py               # Evaluation modeles
+|
+|-- docker-compose.yml              # 13 services
+|-- setup.cfg                       # Config pytest + coverage
++-- README.md
+```
+
+---
+
+## Fonctionnalites
+
+### 1. Detection de Fraude (Flink)
+
+- Fenetres tumbling de 5 minutes
+- Extraction de 90+ features par transaction
+- Modele RandomForest (precision 94%, rappel 89%)
+- Score de fraude cache dans Redis, expose via API
+- Latence < 500ms (p99)
+
+### 2. Recommandations Personnalisees (Flink)
+
+- Fenetres de session de 30 minutes
+- Filtrage collaboratif (item-based)
+- Top-K recommandations cachees dans Redis (TTL 1h)
+- 30+ features utilisateur/produit
+
+### 3. Prevision d'Inventaire (Flink)
+
+- Fenetres glissantes de 24 heures
+- 50+ features time-series
+- Modele hybride Prophet (60%) + ARIMA (40%)
+- Alertes de rupture de stock (seuil < 100 unites)
+- Precision 87.5%, latence < 2s
+
+### 4. API REST (FastAPI)
+
+| Endpoint | Methode | Description |
+|----------|---------|-------------|
+| `/health` | GET | Etat des services (Redis, Kafka) |
+| `/fraud/{user_id}` | GET | Score de fraude d'un utilisateur |
+| `/recommendations/{user_id}` | GET | Recommandations personnalisees |
+| `/inventory/{product_id}` | GET | Prevision de stock + alertes |
+| `/metrics` | GET | Metriques Prometheus |
+
+### 5. Lakehouse (Iceberg + dbt)
+
+- **Bronze** : Donnees brutes Kafka (events, fraud_scores, inventory)
+- **Silver** : Donnees nettoyees et deduplicees
+- **Gold** : Dimensions (users, products) + KPIs business
+- Stockage S3 via MinIO
+
+### 6. Monitoring (Prometheus + Grafana)
+
+- 4 targets scrapes : FastAPI, Flink, Redis, Prometheus
+- 7 regles d'alerte (APIDown, RedisDown, FlinkJobFailed, etc.)
+- Dashboard unifie avec 20 panels (services, API, Redis, KPIs)
+
+### 7. Orchestration (Airflow)
+
+- DAG `data_quality` : verification quotidienne (API, Redis, Kafka, dbt)
+
+---
+
+## Services Docker
+
+| Service | Image | Port |
+|---------|-------|------|
+| Zookeeper | confluentinc/cp-zookeeper:7.5.0 | 2181 |
+| Kafka | confluentinc/cp-kafka:7.5.0 | 9092 |
+| Schema Registry | confluentinc/cp-schema-registry:7.5.0 | 8086 |
+| Kafka UI | provectuslabs/kafka-ui | 8080 |
+| Redis | redis:7-alpine | 6381 |
+| Flink JobManager | custom (PyFlink 1.18.1) | 8081 |
+| Flink TaskManager x2 | custom (PyFlink 1.18.1) | - |
+| MinIO | minio/minio | 9010 / 9001 |
+| Prometheus | prom/prometheus:v2.48.0 | 9090 |
+| Redis Exporter | oliver006/redis_exporter | 9121 |
+| Grafana | grafana/grafana:10.2.0 | 3000 |
+| Airflow | apache/airflow:2.7.3-python3.11 | 8082 |
+
+---
+
+## Tests
+
+```bash
+# Tous les tests
 pytest tests/ -v
 
-# Run with coverage
-pytest tests/ --cov=. --cov-report=html
+# Avec couverture
+pytest tests/ --cov=. --cov-report=term-missing
 
-# Results
-# 79 tests passing (33 from this implementation)
-# Coverage: >70%
-```
+# Tests unitaires seulement
+pytest tests/unit/ -v
 
-### Run Specific Components
-
-```bash
-# Test fraud detection
-pytest tests/unit/test_fraud_detection.py -v
-
-# Test recommendations
-pytest tests/unit/test_recommendations.py -v
-pytest tests/unit/test_recommendation_engine.py -v
-
-# Test caching
-pytest tests/unit/test_cache_manager.py -v
-
-# Integration tests (require Kafka)
-docker-compose up -d
+# Tests d'integration (Docker requis)
 pytest tests/integration/ -v
+
+# Test specifique
+pytest tests/unit/test_fraud_detection.py -v
 ```
+
+### Resultats actuels
+
+```
+177 passed, 3 skipped, 0 failed
+Coverage: 78% (objectif > 70%)
+Temps: ~17s
+```
+
+### Couverture par module
+
+| Module | Coverage |
+|--------|----------|
+| config/ | 100% |
+| serving/ | 87-100% |
+| ingestion/ | 75-98% |
+| processing/utils/ | 82-92% |
+| processing/flink_jobs/ | 41-63% |
 
 ---
 
-## 🤖 Model Training
-
-### Train Recommendation Model
+## Entrainement des Modeles
 
 ```bash
-# Generate synthetic training data and train
+# Fraude
+python scripts/train_fraud_model.py
+
+# Recommandations
 python scripts/train_recommendation_model.py
 
-# Output
-# ✅ Model saved to processing/models/recommendation_model.pkl
-# ✅ Training completed in 0.02s
-```
+# Inventaire
+python scripts/train_inventory_model.py
 
-### Evaluate Model Quality
-
-```bash
+# Evaluation
 python scripts/evaluate_recommendations.py
-
-# Output
-# Generated 2 recommendations
-# Coverage: 100%
-# Precision@10: 0.85
-# Recall@10: 0.78
+python scripts/evaluate_inventory_models.py
 ```
 
 ---
 
-## 📊 Quality Metrics
-
-### Code Quality
-
-| Component | Quality | Tests | Status |
-|-----------|---------|-------|--------|
-| Fraud Detection | 9.0/10 | 6/6 ✅ | Production Ready |
-| Recommendations | 9.05/10 | 6/6 ✅ | Production Ready |
-| Recommendation Cache | 9.17/10 | 7/7 ✅ | Production Ready |
-| Feature Engineering | 8.71/10 | 5/5 ✅ | Production Ready |
-| Inventory Forecasting | 8.99/10 | 6/6 ✅ | Production Ready |
-| Time-Series Features | 9.36/10 | 5/5 ✅ | Production Ready |
-| Inventory Cache | 9.5/10 | 6/6 ✅ | Production Ready |
-| Training & Evaluation | 8.66/10 | 2/2 ✅ | Production Ready |
-| **Overall** | **8.11/10** | **112/113 ✅** | **Production Ready** |
-
-### Standards Compliance
-
-- ✅ **KISS Principle:** Functions < 30 lines
-- ✅ **Logging:** Zero print(), comprehensive logging
-- ✅ **No Hardcoding:** All config externalized
-- ✅ **Type Hints:** 100% typed Python code
-- ✅ **Error Handling:** try/except with logging
-- ✅ **Testing:** >70% code coverage
-- ✅ **Documentation:** Full docstrings & guides
-
----
-
-## 🚀 Deployment
-
-### Local Development
+## Commandes Utiles
 
 ```bash
-# Start everything
+# Demarrer tous les services
 docker-compose up -d
 
-# Check status
-docker-compose ps
+# Arreter tous les services
+docker-compose down
 
-# View logs
+# Voir les logs d'un service
 docker-compose logs -f kafka
-docker-compose logs -f flink
-```
 
-### Production Deployment
-
-For Kubernetes deployment:
-- See `k8s/helm/` for Helm charts
-- See `CONTRIBUTING.md` for deployment guidelines
-- Production configuration in `config/constants.py`
-
----
-
-## 📚 Documentation
-
-| Document | Purpose |
-|----------|---------|
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical overview & design decisions |
-| [GETTING_STARTED.md](docs/GETTING_STARTED.md) | Step-by-step setup guide |
-| [API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md) | REST API endpoints & schemas |
-| [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues & solutions |
-
----
-
-## 🛠️ Common Commands
-
-```bash
-# Services
-docker-compose up -d          # Start all services
-docker-compose down -v        # Stop and clean
-
-# Kafka
+# Lister les topics Kafka
 docker-compose exec kafka kafka-topics --list --bootstrap-server localhost:9092
-docker-compose exec kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic events
 
-# Testing
-pytest tests/ -v              # Run all tests
-pytest tests/ --cov          # With coverage
-
-# Model training & evaluation
-python scripts/train_recommendation_model.py
-python scripts/evaluate_recommendations.py
-python scripts/train_inventory_model.py
-python scripts/evaluate_inventory_models.py
-
-# Load real data (2.7M events)
+# Charger les donnees Retail Rocket
 python scripts/load_real_data.py --source retail_rocket
 
-# Validate data quality
-python scripts/validate_data_quality.py
-python scripts/compare_datasets.py
-
-# Cleanup
-docker-compose down -v
+# Lancer l'API
+uvicorn serving.api.main:app --host 0.0.0.0 --port 8000
 ```
 
 ---
 
-## 🔐 Security & Best Practices
+## Conventions
 
-- ✅ Secrets in `.env` (never hardcoded)
-- ✅ Environment variables for credentials
-- ✅ Comprehensive logging (no sensitive data)
-- ✅ Type hints for safety
-- ✅ Schema validation (Avro)
-- ✅ Tested error handling
-- ✅ SQL injection prevention
-
----
-
-## 🤝 Contributing
-
-This project follows KISS principles:
-1. **Simple code** - One function = one responsibility
-2. **No over-engineering** - Solve current problem
-3. **Logging over print** - Always use logging
-4. **Test-driven** - Write tests with/before code
-5. **Clear commits** - Format: `type(scope): description`
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+- **Python** : snake_case, PascalCase (classes), SCREAMING_SNAKE (constantes)
+- **Logging** : uniquement `logging`, zero `print()`
+- **Config** : `config/constants.py` + `os.getenv()` avec fallback
+- **Git** : `type(scope): description` (feat/fix/docs/test/refactor/chore/perf)
+- **Tests** : pytest, coverage > 70%, fixtures dans conftest.py
+- **Fonctions** : < 30 lignes, type hints obligatoires
 
 ---
 
-## 📈 Performance Targets
+## Sprints
 
-| Metric | Target | Current | Status |
-|--------|--------|---------|--------|
-| Fraud Latency (p99) | <500ms | <500ms | ✅ |
-| Recommendation Latency | <1s | <500ms | ✅ |
-| Cache Hit Rate | >80% | 85%+ | ✅ |
-| Test Coverage | >70% | >70% | ✅ |
-| Uptime SLA | 99.95% | - | Setup Ready |
-
----
-
-## 📄 License
-
-MIT License - See [LICENSE](LICENSE)
-
----
-
-## 🎓 What You'll Learn
-
-- ✅ Real-time streaming architecture (Kafka)
-- ✅ Stream processing (Apache Flink)
-- ✅ ML inference in production
-- ✅ Analytics layer (Iceberg + dbt)
-- ✅ API design (FastAPI)
-- ✅ System monitoring (Prometheus + Grafana)
-- ✅ Testing & observability best practices
-- ✅ Production-ready code standards
-
-Perfect for leveling up in **Data Engineering** and **System Design**.
-
----
-
-**Built with ❤️ | Production Ready | 2026**
+| Sprint | Contenu | Status |
+|--------|---------|--------|
+| 1 | Kafka producers/consumers + schemas Avro | Complete |
+| 2 | Integration donnees (Retail Rocket 2.7M events) | Complete |
+| 3 | Flink Fraud Detection | Complete |
+| 4 | Recommandations personnalisees | Complete |
+| 5 | Prevision d'inventaire | Complete |
+| 6 | Lakehouse (Iceberg + dbt) | Partiel |
+| 7 | API FastAPI (Serving Layer) | Complete |
+| 8 | Docker + Monitoring + Orchestration | Complete |
