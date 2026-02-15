@@ -1,0 +1,273 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "id": 100,
+      "title": "--- SERVICES STATUS ---",
+      "type": "text",
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 0 },
+      "options": { "mode": "markdown", "content": "## Services Status" }
+    },
+    {
+      "id": 1,
+      "title": "API",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 2 },
+      "datasource": "Prometheus",
+      "targets": [{ "expr": "up{job=\"fastapi\"}", "legendFormat": "API" }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } }, "type": "value" }],
+          "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "title": "Redis",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 2 },
+      "datasource": "Prometheus",
+      "targets": [{ "expr": "redis_up", "legendFormat": "Redis" }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } }, "type": "value" }],
+          "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "title": "Flink",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 2 },
+      "datasource": "Prometheus",
+      "targets": [{ "expr": "up{job=\"flink\"}", "legendFormat": "Flink" }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } }, "type": "value" }],
+          "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "title": "Prometheus",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 2 },
+      "datasource": "Prometheus",
+      "targets": [{ "expr": "up{job=\"prometheus\"}", "legendFormat": "Prometheus" }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } }, "type": "value" }],
+          "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "title": "Redis Clients",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 2 },
+      "datasource": "Prometheus",
+      "targets": [{ "expr": "redis_connected_clients", "legendFormat": "Clients" }],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 6,
+      "title": "Redis Keys",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 2 },
+      "datasource": "Prometheus",
+      "targets": [{ "expr": "sum(redis_db_keys)", "legendFormat": "Keys" }],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 101,
+      "title": "--- API METRICS ---",
+      "type": "text",
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 6 },
+      "options": { "mode": "markdown", "content": "## API FastAPI" }
+    },
+    {
+      "id": 7,
+      "title": "Requests per Second",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": "Prometheus",
+      "targets": [{ "expr": "sum(rate(api_requests_total[5m])) by (endpoint)", "legendFormat": "{{endpoint}}" }],
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+    },
+    {
+      "id": 8,
+      "title": "Latency p50 / p95 / p99",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "histogram_quantile(0.50, rate(api_request_latency_seconds_bucket[5m]))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, rate(api_request_latency_seconds_bucket[5m]))", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, rate(api_request_latency_seconds_bucket[5m]))", "legendFormat": "p99" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "id": 9,
+      "title": "Status Codes",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 16 },
+      "datasource": "Prometheus",
+      "targets": [{ "expr": "sum(api_requests_total) by (status)", "legendFormat": "HTTP {{status}}" }]
+    },
+    {
+      "id": 10,
+      "title": "Requests by Endpoint",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 16 },
+      "datasource": "Prometheus",
+      "targets": [{ "expr": "sum(api_requests_total) by (endpoint)", "legendFormat": "{{endpoint}}" }],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 11,
+      "title": "API Error Rate",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 16 },
+      "datasource": "Prometheus",
+      "targets": [{ "expr": "sum(rate(api_requests_total{status=\"404\"}[5m])) / sum(rate(api_requests_total[5m]))", "legendFormat": "Error Rate" }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit", "min": 0, "max": 1,
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.1 }, { "color": "red", "value": 0.3 }] }
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 12,
+      "title": "Endpoint Latency p95",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 16 },
+      "datasource": "Prometheus",
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(api_request_latency_seconds_bucket[5m])) by (le, endpoint))", "legendFormat": "{{endpoint}}" }],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "id": 102,
+      "title": "--- REDIS ---",
+      "type": "text",
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 24 },
+      "options": { "mode": "markdown", "content": "## Redis Cache" }
+    },
+    {
+      "id": 13,
+      "title": "Memory Used",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 26 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "redis_memory_used_bytes", "legendFormat": "Used" },
+        { "expr": "redis_memory_max_bytes", "legendFormat": "Max" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] }
+    },
+    {
+      "id": 14,
+      "title": "Commands per Second",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 26 },
+      "datasource": "Prometheus",
+      "targets": [{ "expr": "rate(redis_commands_processed_total[5m])", "legendFormat": "Commands/s" }],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
+    },
+    {
+      "id": 15,
+      "title": "Hit Rate",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 4, "x": 16, "y": 26 },
+      "datasource": "Prometheus",
+      "targets": [{ "expr": "redis_keyspace_hits_total / (redis_keyspace_hits_total + redis_keyspace_misses_total)", "legendFormat": "Hit Rate" }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit", "min": 0, "max": 1,
+          "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 0.5 }, { "color": "green", "value": 0.8 }] }
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 16,
+      "title": "Network I/O",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 4, "x": 20, "y": 26 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "rate(redis_net_input_bytes_total[5m])", "legendFormat": "In" },
+        { "expr": "rate(redis_net_output_bytes_total[5m])", "legendFormat": "Out" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] }
+    },
+    {
+      "id": 103,
+      "title": "--- BUSINESS KPIs ---",
+      "type": "text",
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 34 },
+      "options": { "mode": "markdown", "content": "## Business KPIs" }
+    },
+    {
+      "id": 17,
+      "title": "Fraud - Hit vs Miss",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 36 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "sum(api_requests_total{endpoint=\"fraud\",status=\"200\"})", "legendFormat": "Found (200)" },
+        { "expr": "sum(api_requests_total{endpoint=\"fraud\",status=\"404\"})", "legendFormat": "Not Found (404)" }
+      ]
+    },
+    {
+      "id": 18,
+      "title": "Recommendations - Hit vs Miss",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 36 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "sum(api_requests_total{endpoint=\"recommendations\",status=\"200\"})", "legendFormat": "Found (200)" },
+        { "expr": "sum(api_requests_total{endpoint=\"recommendations\",status=\"404\"})", "legendFormat": "Not Found (404)" }
+      ]
+    },
+    {
+      "id": 19,
+      "title": "Inventory - Hit vs Miss",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 36 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "sum(api_requests_total{endpoint=\"inventory\",status=\"200\"})", "legendFormat": "Found (200)" },
+        { "expr": "sum(api_requests_total{endpoint=\"inventory\",status=\"404\"})", "legendFormat": "Not Found (404)" }
+      ]
+    },
+    {
+      "id": 20,
+      "title": "Requests per Minute by Endpoint",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 44 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "sum(rate(api_requests_total{endpoint=\"fraud\"}[5m])) * 60", "legendFormat": "Fraud" },
+        { "expr": "sum(rate(api_requests_total{endpoint=\"recommendations\"}[5m])) * 60", "legendFormat": "Recommendations" },
+        { "expr": "sum(rate(api_requests_total{endpoint=\"inventory\"}[5m])) * 60", "legendFormat": "Inventory" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqpm" }, "overrides": [] }
+    }
+  ],
+  "schemaVersion": 38,
+  "tags": ["overview", "e-commerce"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "E-Commerce Streaming - Overview",
+  "uid": "overview",
+  "version": 1
+}
